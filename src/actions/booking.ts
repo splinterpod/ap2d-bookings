@@ -211,7 +211,8 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   await prisma.booking.update({ where: { id: bookingId }, data: { status: "CANCELLED" } });
   await audit(user.id, "booking.cancel", { type: "booking", id: bookingId }, { byAdmin: isAdmin && !isOwner });
 
-  if (booking.user.notifyConfirmations) {
+  // Only notify when an admin cancels someone else's booking — not for self-service cancel.
+  if (booking.user.notifyConfirmations && isAdmin && !isOwner) {
     await sendEmail({
       to: booking.user.email,
       subject: "Booking cancelled",
