@@ -44,7 +44,7 @@ export default async function SettingsPage() {
           <form action={updateNotificationPrefsAction} className="space-y-3">
             <label className="flex items-center gap-3 text-sm">
               <input type="checkbox" name="notifyConfirmations" defaultChecked={user.notifyConfirmations} />
-              Booking approval updates and cancellations
+              Booking approval updates
             </label>
             <label className="flex items-center gap-3 text-sm">
               <input type="checkbox" name="notifyReminders" defaultChecked={user.notifyReminders} />

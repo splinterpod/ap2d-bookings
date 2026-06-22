@@ -127,15 +127,13 @@ export async function processSessionRemindersAndNoShows(now = new Date()): Promi
         data: { status: "CANCELLED", noShow: true },
       });
       await notifyNextOnWaitlist(b.instrumentId, b.startAt, b.endAt);
-      if (b.user.notifyConfirmations) {
-        await sendEmail({
-          to: b.user.email,
-          subject: `Booking cancelled — no sign-in — ${b.instrument.name}`,
-          heading: "Booking cancelled (no sign-in)",
-          body: `<p>Your booking on <strong>${b.instrument.name}</strong> (${formatTz(b.startAt, "EEE MMM d, h:mm a")} – ${formatTz(b.endAt, "h:mm a")}) was automatically cancelled because you did not sign in within ${inst.noShowCancelMinutes} minutes of the start time.</p>`,
-          cta: { label: "Book again", href: `${APP_URL}/calendar?instrument=${b.instrument.slug}` },
-        });
-      }
+      await sendEmail({
+        to: b.user.email,
+        subject: `Booking cancelled — no sign-in — ${b.instrument.name}`,
+        heading: "Booking cancelled (no sign-in)",
+        body: `<p>Your booking on <strong>${b.instrument.name}</strong> (${formatTz(b.startAt, "EEE MMM d, h:mm a")} – ${formatTz(b.endAt, "h:mm a")}) was automatically cancelled because you did not sign in within ${inst.noShowCancelMinutes} minutes of the start time.</p>`,
+        cta: { label: "Book again", href: `${APP_URL}/calendar?instrument=${b.instrument.slug}` },
+      });
       noShowCancellations++;
     }
   }
