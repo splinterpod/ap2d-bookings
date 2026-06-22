@@ -11,7 +11,7 @@ next-env.d.ts
 # production
 /build
 
-# env files (keep .env.example)
+# env files (keep .env.example + deploy-secrets.local.example)
 .env
 .env*.local
 .env.development

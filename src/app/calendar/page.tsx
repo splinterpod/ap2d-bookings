@@ -74,6 +74,7 @@ export default async function CalendarPage({
   });
 
   const isAdmin = user.role === "ADMIN";
+  const showBookerNames = user.role !== "GUEST";
   const isTrained =
     isAdmin ||
     !!(await prisma.instrumentTraining.findUnique({
@@ -95,7 +96,11 @@ export default async function CalendarPage({
     id: b.id,
     mine: b.userId === user.id,
     status: b.status,
-    ownerLabel: isAdmin ? b.user.username : b.userId === user.id ? "You" : undefined,
+    ownerLabel: showBookerNames
+      ? b.userId === user.id
+        ? "You"
+        : b.user.username
+      : undefined,
     startKey: dateKey(b.startAt),
     startMin: parseClock(clockTime(b.startAt)),
     endKey: dateKey(b.endAt),
@@ -192,6 +197,7 @@ export default async function CalendarPage({
         bookings={serBookings}
         canBook={isTrained && !instrument.maintenance}
         isAdmin={isAdmin}
+        showBookerNames={showBookerNames}
         limitMinutes={limit}
         usedStandardMinutes={usage.standardMinutes}
         myWaitlist={myWaitlist.map((w) => ({

@@ -24,7 +24,6 @@ export async function GET(req: NextRequest) {
 
   const now = new Date();
   const result = {
-    reminders24: 0,
     reminders1: 0,
     lateSignInReminders: 0,
     noShowCancellations: 0,
@@ -34,29 +33,6 @@ export async function GET(req: NextRequest) {
     guestsDeactivated: 0,
     waitlistExpired: 0,
   };
-
-  // 24-hour reminders
-  const due24 = await prisma.booking.findMany({
-    where: {
-      status: "CONFIRMED",
-      reminder24Sent: false,
-      startAt: { gt: now, lte: addMinutes(now, 24 * 60) },
-    },
-    include: { user: true, instrument: true },
-  });
-  for (const b of due24) {
-    if (b.user.notifyReminders) {
-      await sendEmail({
-        to: b.user.email,
-        subject: "Reminder: upcoming Raman session",
-        heading: "Upcoming session",
-        body: `<p>This is a reminder for your booking on <strong>${b.instrument.name}</strong>:</p><p>${formatTz(b.startAt, "EEEE MMM d")} · ${formatTz(b.startAt, "h:mm a")} – ${formatTz(b.endAt, "h:mm a")}</p>`,
-        cta: { label: "View booking", href: `${APP_URL}/bookings` },
-      });
-    }
-    await prisma.booking.update({ where: { id: b.id }, data: { reminder24Sent: true } });
-    result.reminders24++;
-  }
 
   // 1-hour reminders
   const due1 = await prisma.booking.findMany({
@@ -77,7 +53,7 @@ export async function GET(req: NextRequest) {
         cta: { label: "Sign in to session", href: `${APP_URL}/bookings` },
       });
     }
-    await prisma.booking.update({ where: { id: b.id }, data: { reminder1Sent: true, reminder24Sent: true } });
+    await prisma.booking.update({ where: { id: b.id }, data: { reminder1Sent: true } });
     result.reminders1++;
   }
 

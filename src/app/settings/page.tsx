@@ -44,11 +44,11 @@ export default async function SettingsPage() {
           <form action={updateNotificationPrefsAction} className="space-y-3">
             <label className="flex items-center gap-3 text-sm">
               <input type="checkbox" name="notifyConfirmations" defaultChecked={user.notifyConfirmations} />
-              Booking confirmations and cancellations
+              Booking approval updates and cancellations
             </label>
             <label className="flex items-center gap-3 text-sm">
               <input type="checkbox" name="notifyReminders" defaultChecked={user.notifyReminders} />
-              Session reminders (24h and 1h before)
+              Session reminders (1h before, late sign-in, auto sign-out)
             </label>
             <Button size="sm">Save preferences</Button>
           </form>

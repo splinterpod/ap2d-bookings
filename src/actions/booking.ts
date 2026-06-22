@@ -152,12 +152,12 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
 
   await audit(user.id, "booking.create", { type: "booking", id: booking.id }, { status });
 
-  if (user.notifyConfirmations) {
+  if (needsApproval && user.notifyConfirmations) {
     await sendEmail({
       to: user.email,
-      subject: needsApproval ? "Booking submitted (awaiting approval)" : "Booking confirmed",
-      heading: needsApproval ? "Booking awaiting approval" : "Booking confirmed",
-      body: `<p><strong>${instrument.name}</strong></p><p>${formatTz(startAt, "EEE MMM d, yyyy")} · ${formatTz(startAt, "h:mm a")} – ${formatTz(endAt, "h:mm a")}</p>${needsApproval ? "<p>An administrator will review your request.</p>" : ""}`,
+      subject: "Booking submitted (awaiting approval)",
+      heading: "Booking awaiting approval",
+      body: `<p><strong>${instrument.name}</strong></p><p>${formatTz(startAt, "EEE MMM d, yyyy")} · ${formatTz(startAt, "h:mm a")} – ${formatTz(endAt, "h:mm a")}</p><p>An administrator will review your request.</p>`,
       cta: { label: "View my bookings", href: `${APP_URL}/bookings` },
     });
   }

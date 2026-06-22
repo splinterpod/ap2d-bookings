@@ -5,7 +5,8 @@ import { getInstrumentStatus } from "@/lib/instrument-status";
 import { autoSignOutExpiredSessions, processSessionRemindersAndNoShows } from "@/lib/session-lifecycle";
 import { LAB_SUBTITLE, PRODUCT_NAME } from "@/lib/branding";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardBody } from "@/components/ui/card";
+import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
+import { ReportIssueForm } from "@/components/report-issue-form";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,18 @@ export default async function HomePage() {
           </CardBody>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Report an issue</CardTitle>
+          <p className="mt-1 text-sm font-normal text-slate-500">
+            Problems with the webpage, instrument software, or hardware? Let administrators know.
+          </p>
+        </CardHeader>
+        <CardBody>
+          <ReportIssueForm />
+        </CardBody>
+      </Card>
     </div>
   );
 }

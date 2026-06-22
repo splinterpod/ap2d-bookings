@@ -12,6 +12,7 @@ import {
 } from "@/actions/auth";
 import { updateUsernameAction, type SettingsFormState } from "@/actions/settings";
 import { Input, Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Alert } from "@/components/ui/alert";
 
@@ -40,11 +41,19 @@ export function LoginForm() {
       <Messages state={state} />
       <div>
         <Label htmlFor="identifier">Email or username</Label>
-        <Input id="identifier" name="identifier" autoComplete="username" required />
+        <Input
+          id="identifier"
+          name="identifier"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          required
+        />
       </div>
       <div>
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required />
+        <PasswordInput id="password" name="password" autoComplete="current-password" required />
       </div>
       <SubmitButton className="w-full">Sign in</SubmitButton>
       <div className="flex justify-between text-sm">
@@ -70,12 +79,22 @@ export function RegisterForm() {
       </div>
       <div>
         <Label htmlFor="username">Username</Label>
-        <Input id="username" name="username" autoComplete="username" required />
-        <p className="mt-1 text-xs text-slate-500">This is your login name.</p>
+        <Input
+          id="username"
+          name="username"
+          autoComplete="nickname"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          required
+        />
+        <p className="mt-1 text-xs text-slate-500">
+          Short login name — not your email. Letters, numbers, dots, dashes, or underscores.
+        </p>
       </div>
       <div>
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" autoComplete="new-password" required />
+        <PasswordInput id="password" name="password" autoComplete="new-password" required />
         <p className="mt-1 text-xs text-slate-500">At least 8 characters.</p>
       </div>
       <SubmitButton className="w-full">Create account</SubmitButton>
@@ -134,7 +153,10 @@ export function ChangeUsernameForm({ currentUsername }: { currentUsername: strin
         <Input
           id="username"
           name="username"
-          autoComplete="username"
+          autoComplete="nickname"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           defaultValue={currentUsername}
           required
         />

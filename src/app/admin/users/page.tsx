@@ -185,7 +185,14 @@ export default async function AdminUsersPage() {
             </div>
             <div>
               <Label>Username</Label>
-              <Input name="username" required />
+              <Input
+                name="username"
+                autoComplete="nickname"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                required
+              />
             </div>
             <div>
               <Label>Temp password</Label>

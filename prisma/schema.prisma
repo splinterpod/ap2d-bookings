@@ -163,7 +163,6 @@ model Booking {
   notes        String?
   noShow       Boolean       @default(false)
 
-  reminder24Sent Boolean @default(false)
   reminder1Sent  Boolean @default(false)
   lateSignInReminderSent Boolean @default(false)
   autoSignedOutNotified  Boolean @default(false)

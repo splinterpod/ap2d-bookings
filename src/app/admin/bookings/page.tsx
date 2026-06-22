@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
+import { isAccountOwner } from "@/lib/account-owner";
 import { formatTz } from "@/lib/time";
 import { rejectBookingAction } from "@/actions/admin-instrument";
 import { ApproveBookingButton } from "@/components/admin/approve-booking-button";
+import { DeleteBookingButton } from "@/components/admin/delete-booking-button";
 import { cancelBookingAction } from "@/actions/booking";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +13,8 @@ import { Button } from "@/components/ui/button";
 export const dynamic = "force-dynamic";
 
 export default async function AdminBookingsPage() {
+  const admin = await requireAdmin();
+  const owner = isAccountOwner(admin);
   const now = new Date();
 
   const pending = await prisma.booking.findMany({
@@ -69,6 +74,7 @@ export default async function AdminBookingsPage() {
                 <th className="py-2 pr-3">Status</th>
                 <th className="py-2 pr-3">Session</th>
                 <th className="py-2 pr-3"></th>
+                {owner && <th className="py-2 pr-3"></th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -111,6 +117,14 @@ export default async function AdminBookingsPage() {
                       </form>
                     )}
                   </td>
+                  {owner && (
+                    <td className="py-2 pr-3">
+                      <DeleteBookingButton
+                        bookingId={b.id}
+                        label={`${b.user.username} · ${formatTz(b.startAt, "MMM d, h:mm a")}`}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

@@ -1,12 +1,18 @@
 import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
+import { isAccountOwner } from "@/lib/account-owner";
 import { formatTz } from "@/lib/time";
-import { describeLaserSession, finalLaserReadings, laserPhotonSummary } from "@/lib/laser-session";
+import { describeLaserSession, laserPhotonSummary } from "@/lib/laser-session";
+import { DeleteSessionButton } from "@/components/admin/delete-session-button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSessionsPage() {
+  const admin = await requireAdmin();
+  const owner = isAccountOwner(admin);
+
   const sessions = await prisma.instrumentSession.findMany({
     include: {
       user: { select: { username: true } },
@@ -32,6 +38,7 @@ export default async function AdminSessionsPage() {
               <th className="py-2 pr-3">Laser</th>
               <th className="py-2 pr-3">Photon counts</th>
               <th className="py-2 pr-3">Flags</th>
+              {owner && <th className="py-2 pr-3"></th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -53,6 +60,14 @@ export default async function AdminSessionsPage() {
                     {s.unsignedOut && <Badge tone="amber">unsigned-out</Badge>}
                   </div>
                 </td>
+                {owner && (
+                  <td className="py-2 pr-3">
+                    <DeleteSessionButton
+                      sessionId={s.id}
+                      label={`${s.user.username} · ${formatTz(s.signedInAt, "MMM d, h:mm a")}`}
+                    />
+                  </td>
+                )}
               </tr>
             ))}
             {sessions.length === 0 && (

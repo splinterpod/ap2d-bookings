@@ -62,6 +62,7 @@ type Props = {
   bookings: SerBooking[];
   canBook: boolean;
   isAdmin: boolean;
+  showBookerNames: boolean;
   limitMinutes: number | null;
   usedStandardMinutes: number;
   myWaitlist: { id: string; startKey: string; startMin: number }[];
@@ -444,15 +445,26 @@ export function CalendarClient(props: Props) {
                     const tone = b.mine
                       ? "bg-emerald-100 border-emerald-300 text-emerald-900"
                       : "bg-slate-200 border-slate-300 text-slate-600";
+                    const tooltip = [
+                      `${b.startLabel} – ${b.endLabel}`,
+                      props.showBookerNames && b.ownerLabel && !b.mine ? b.ownerLabel : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
                     return (
                       <div
                         key={b.id}
-                        className={`pointer-events-none absolute left-0.5 right-0.5 z-20 overflow-hidden rounded-md border px-1 py-0.5 text-[10px] leading-tight ${tone}`}
+                        className={`pointer-events-auto absolute left-0.5 right-0.5 z-20 cursor-default overflow-hidden rounded-md border px-1 py-0.5 text-[10px] leading-tight ${tone}`}
                         style={{ top, height }}
-                        title={`${b.startLabel} – ${b.endLabel}`}
+                        title={tooltip}
                       >
                         <div className="font-semibold">{b.mine ? "Your booking" : "Booked"}</div>
-                        {props.isAdmin && b.ownerLabel && <div>{b.ownerLabel}</div>}
+                        {height >= 22 && (
+                          <div className="truncate opacity-90">
+                            {b.startLabel} – {b.endLabel}
+                          </div>
+                        )}
+                        {props.showBookerNames && b.ownerLabel && !b.mine && <div>{b.ownerLabel}</div>}
                         {b.status === "PENDING" && <div className="italic">pending</div>}
                       </div>
                     );
@@ -469,6 +481,9 @@ export function CalendarClient(props: Props) {
           <span className="flex items-center gap-1">
             <span className="inline-block h-3 w-3 rounded border border-slate-300 bg-slate-200" /> Booked
           </span>
+          {props.showBookerNames && (
+            <span>Member view shows who booked each slot.</span>
+          )}
           {canBook && !instrument.maintenance && (
             <span className="flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded border-2 border-brand-400 bg-brand-100/40" /> Drag to select (15 min)

@@ -10,6 +10,7 @@ import { APP_URL } from "@/lib/env";
 import { PRODUCT_NAME } from "@/lib/branding";
 import { UNLIMITED } from "@/lib/booking";
 import { canAdminEditUserRole, canAssignAdminRole, isAccountOwner } from "@/lib/account-owner";
+import { usernameSchema } from "@/lib/validation";
 
 function num(value: FormDataEntryValue | null): number | null {
   if (value === null || value === "") return null;
@@ -206,14 +207,16 @@ export async function setTrainingAction(formData: FormData): Promise<void> {
 export async function createUserAction(formData: FormData): Promise<void> {
   const admin = await requireAdmin();
   const email = String(formData.get("email") || "").trim().toLowerCase();
-  const username = String(formData.get("username") || "").trim();
+  const usernameRaw = formData.get("username");
   const password = String(formData.get("password") || "");
   const role = String(formData.get("role") || "MEMBER") as "MEMBER" | "ADMIN" | "GUEST";
   if (role === "ADMIN" && !canAssignAdminRole(admin)) return;
 
   const guestExpiresRaw = formData.get("guestExpiresAt");
 
-  if (!email || !username || password.length < 8) return;
+  const usernameParsed = usernameSchema.safeParse(usernameRaw);
+  if (!email || !usernameParsed.success || password.length < 8) return;
+  const username = usernameParsed.data;
 
   const guestExpiresAt =
     role === "GUEST" && guestExpiresRaw ? new Date(`${String(guestExpiresRaw)}T23:59:59`) : null;

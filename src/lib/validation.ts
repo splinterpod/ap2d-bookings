@@ -1,11 +1,45 @@
 import { z } from "zod";
 
+const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]+$/;
+
+/** Normalizes mobile/smart-keyboard quirks before username validation. */
+export function normalizeUsernameInput(raw: string): string {
+  return raw
+    .trim()
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[\u2010\u2011\u2012\u2013\u2014\u2212]/g, "-")
+    .replace(/[\uFF0E\u00B7\u2219]/g, ".");
+}
+
+function usernameFormatMessage(value: string): string | null {
+  if (value.includes("@")) {
+    return "Username can't be an email address — use a short login name without @.";
+  }
+  if (/\s/.test(value)) {
+    return "Username can't contain spaces. Use letters, numbers, dots, dashes, or underscores.";
+  }
+  if (!USERNAME_PATTERN.test(value)) {
+    return "Use letters, numbers, dots, dashes, or underscores.";
+  }
+  return null;
+}
+
 export const usernameSchema = z
   .string()
-  .trim()
-  .min(3, "Username must be at least 3 characters.")
-  .max(32, "Username must be 32 characters or fewer.")
-  .regex(/^[a-zA-Z0-9_.-]+$/, "Use letters, numbers, dots, dashes or underscores.");
+  .transform(normalizeUsernameInput)
+  .pipe(
+    z
+      .string()
+      .min(3, "Username must be at least 3 characters.")
+      .max(32, "Username must be 32 characters or fewer.")
+      .superRefine((value, ctx) => {
+        const message = usernameFormatMessage(value);
+        if (message) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message });
+        }
+      }),
+  );
 
 export const registerSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email address."),
@@ -34,6 +68,17 @@ export const changePasswordSchema = z.object({
 
 export const changeUsernameSchema = z.object({
   username: usernameSchema,
+});
+
+export const reportIssueSchema = z.object({
+  category: z.enum(["webpage", "software", "hardware"], {
+    errorMap: () => ({ message: "Select an issue type." }),
+  }),
+  description: z
+    .string()
+    .trim()
+    .min(10, "Please describe the issue in at least 10 characters.")
+    .max(2000, "Description must be 2000 characters or fewer."),
 });
 
 export const createBookingSchema = z.object({
