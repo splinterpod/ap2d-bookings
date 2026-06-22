@@ -167,10 +167,9 @@ export function earliestBookableStart(args: {
   if (dayKey > nowKey) {
     return bumpStartPastOccupied(0, duration, occupied, grid);
   }
-  return bumpStartPastOccupied(
-    minFutureGridStart(nowMin, minNoticeMinutes, grid),
-    duration,
-    occupied,
-    grid,
-  );
+  const floor =
+    minNoticeMinutes > 0
+      ? minFutureGridStart(nowMin, minNoticeMinutes, grid)
+      : nowBlockStart(nowMin, grid);
+  return bumpStartPastOccupied(floor, duration, occupied, grid);
 }

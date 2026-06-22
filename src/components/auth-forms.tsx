@@ -89,7 +89,7 @@ export function RegisterForm() {
           required
         />
         <p className="mt-1 text-xs text-slate-500">
-          Short login name — not your email. Letters, numbers, dots, dashes, or underscores.
+          This is your login name. Letters, numbers, dots, dashes, or underscores (3–32 characters).
         </p>
       </div>
       <div>

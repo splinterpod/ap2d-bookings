@@ -324,7 +324,12 @@ export function CalendarClient(props: Props) {
               </Link>
             )}
             {weekNav.isCurrentWeek && (
-              <p className="text-xs text-slate-500">This week</p>
+              <p className="text-xs text-slate-500">
+                Now{" "}
+                <span className="font-semibold tabular-nums text-red-600">
+                  {formatMinuteLabel(liveNow.minutes)}
+                </span>
+              </p>
             )}
           </div>
           <Link
@@ -364,14 +369,6 @@ export function CalendarClient(props: Props) {
                   {fmtHourGutter(h)}
                 </div>
               ))}
-              {showNowLine && (
-                <div
-                  className="pointer-events-none absolute right-0 z-30 -translate-y-1/2 text-[9px] font-semibold leading-none text-red-500"
-                  style={{ top: (liveNow.minutes / 60) * HOUR_PX }}
-                >
-                  {formatMinuteLabel(liveNow.minutes)}
-                </div>
-              )}
             </div>
             {days.map((d) => {
               const dragActive = drag?.dayKey === d.key;
@@ -405,18 +402,9 @@ export function CalendarClient(props: Props) {
                     style={{ top: (liveNow.minutes / 60) * HOUR_PX }}
                   />
                 )}
-                {canDragDay && (
-                  <div
-                    className="absolute inset-0 z-0 cursor-crosshair touch-none"
-                    onPointerDown={(e) => onColumnPointerDown(d.key, e)}
-                    onPointerMove={(e) => onColumnPointerMove(d.key, e)}
-                    onPointerUp={(e) => onColumnPointerUp(d.key, e)}
-                    onPointerCancel={onColumnPointerCancel}
-                  />
-                )}
                 {showSelection && (
                   <div
-                    className="pointer-events-none absolute left-0.5 right-0.5 z-10 rounded-md border-2 border-brand-400 bg-brand-100/40"
+                    className="pointer-events-none absolute left-0.5 right-0.5 z-[30] rounded-md border-2 border-brand-400 bg-brand-100/40"
                     style={{
                       top: (selection.startMin / 60) * HOUR_PX,
                       height: Math.max(8, ((selection.endMin - selection.startMin) / 60) * HOUR_PX),
@@ -425,7 +413,7 @@ export function CalendarClient(props: Props) {
                 )}
                 {showDragPreview && (
                   <div
-                    className={`pointer-events-none absolute left-0.5 right-0.5 z-10 rounded-md border-2 ${
+                    className={`pointer-events-none absolute left-0.5 right-0.5 z-[30] rounded-md border-2 ${
                       dragBookable
                         ? "border-brand-500 bg-brand-200/50"
                         : "border-amber-500 bg-amber-100/50"
@@ -454,7 +442,7 @@ export function CalendarClient(props: Props) {
                     return (
                       <div
                         key={b.id}
-                        className={`pointer-events-auto absolute left-0.5 right-0.5 z-20 cursor-default overflow-hidden rounded-md border px-1 py-0.5 text-[10px] leading-tight ${tone}`}
+                        className={`pointer-events-none absolute left-0.5 right-0.5 z-20 overflow-hidden rounded-md border px-1 py-0.5 text-[10px] leading-tight ${tone}`}
                         style={{ top, height }}
                         title={tooltip}
                       >
@@ -469,6 +457,15 @@ export function CalendarClient(props: Props) {
                       </div>
                     );
                   })}
+                {canDragDay && (
+                  <div
+                    className="absolute inset-0 z-[25] cursor-crosshair touch-none"
+                    onPointerDown={(e) => onColumnPointerDown(d.key, e)}
+                    onPointerMove={(e) => onColumnPointerMove(d.key, e)}
+                    onPointerUp={(e) => onColumnPointerUp(d.key, e)}
+                    onPointerCancel={onColumnPointerCancel}
+                  />
+                )}
               </div>
             );
             })}
@@ -481,9 +478,6 @@ export function CalendarClient(props: Props) {
           <span className="flex items-center gap-1">
             <span className="inline-block h-3 w-3 rounded border border-slate-300 bg-slate-200" /> Booked
           </span>
-          {props.showBookerNames && (
-            <span>Member view shows who booked each slot.</span>
-          )}
           {canBook && !instrument.maintenance && (
             <span className="flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded border-2 border-brand-400 bg-brand-100/40" /> Drag to select (15 min)

@@ -19,6 +19,9 @@ next-env.d.ts
 deploy-secrets.local
 .env.vercel
 
+# local DB backups (never commit)
+/backups/
+
 # prisma
 /prisma/*.db
 

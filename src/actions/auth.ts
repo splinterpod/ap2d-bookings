@@ -10,7 +10,7 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { rateLimit } from "@/lib/ratelimit";
 import { sendEmail } from "@/lib/email";
-import { APP_URL } from "@/lib/env";
+import { ACCOUNT_OWNER_EMAIL, APP_URL } from "@/lib/env";
 import {
   changePasswordSchema,
   forgotPasswordSchema,
@@ -53,17 +53,14 @@ export async function registerAction(_prev: FormState, formData: FormData): Prom
   });
   await audit(user.id, "user.register", { type: "user", id: user.id });
 
-  // Notify admins that someone is awaiting approval.
-  const admins = await prisma.user.findMany({ where: { role: "ADMIN", status: "ACTIVE" } });
-  for (const admin of admins) {
-    await sendEmail({
-      to: admin.email,
-      subject: "New account awaiting approval",
-      heading: "New registration",
-      body: `<p><strong>${username}</strong> (${email}) registered and is awaiting approval.</p>`,
-      cta: { label: "Review in admin", href: `${APP_URL}/admin/users` },
-    });
-  }
+  // Notify account owner that someone is awaiting approval.
+  await sendEmail({
+    to: ACCOUNT_OWNER_EMAIL,
+    subject: "New account awaiting approval",
+    heading: "New registration",
+    body: `<p><strong>${username}</strong> (${email}) registered and is awaiting approval.</p>`,
+    cta: { label: "Review in admin", href: `${APP_URL}/admin/users` },
+  });
 
   redirect("/pending?new=1");
 }

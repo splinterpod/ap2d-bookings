@@ -14,6 +14,7 @@
     "db:push": "prisma db push",
     "db:seed": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs prisma/seed.ts",
     "db:clear-bookings": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs prisma/clear-booking-data.ts",
+    "db:reset-pilot": "node --env-file=.env ./node_modules/tsx/dist/cli.mjs prisma/reset-pilot-data.ts",
     "db:studio": "prisma studio"
   },
   "prisma": {

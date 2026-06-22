@@ -37,12 +37,15 @@ export async function sendEmail(args: SendArgs): Promise<void> {
     return;
   }
   try {
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: EMAIL_FROM,
       to: args.to,
       subject: args.subject,
       html,
     });
+    if (error) {
+      console.error("[email] send failed:", error);
+    }
   } catch (err) {
     console.error("[email] send failed:", err);
   }
