@@ -1,6 +1,7 @@
 import "server-only";
 import { Resend } from "resend";
 import { APP_URL, EMAIL_FROM, RESEND_API_KEY } from "./env";
+import { EMAIL_FOOTER_LINE } from "./branding";
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
@@ -14,7 +15,7 @@ type SendArgs = {
 
 function wrap({ heading, body, cta }: Omit<SendArgs, "to" | "subject">): string {
   const button = cta
-    ? `<p style="margin:24px 0;"><a href="${cta.href}" style="background:#0f766e;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;">${cta.label}</a></p>`
+    ? `<p style="margin:24px 0;"><a href="${cta.href}" style="background:#059669;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;">${cta.label}</a></p>`
     : "";
   return `
   <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#0f172a;">
@@ -22,7 +23,7 @@ function wrap({ heading, body, cta }: Omit<SendArgs, "to" | "subject">): string 
     <div style="font-size:14px;line-height:1.6;color:#334155;">${body}</div>
     ${button}
     <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
-    <p style="font-size:12px;color:#94a3b8;">Kherani Lab Instrument Booking System · <a href="${APP_URL}" style="color:#0f766e;">${APP_URL.replace(/^https?:\/\//, "")}</a></p>
+    <p style="font-size:12px;color:#94a3b8;">${EMAIL_FOOTER_LINE} · <a href="${APP_URL}" style="color:#059669;">${APP_URL.replace(/^https?:\/\//, "")}</a></p>
   </div>`;
 }
 

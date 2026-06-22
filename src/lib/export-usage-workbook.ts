@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { PRODUCT_TAGLINE } from "./branding";
 import type { BookingStatus, LaserPhase } from "@prisma/client";
 import { formatTz } from "./time";
 import { laserCountForExport } from "./laser-session";
@@ -214,7 +215,7 @@ export async function buildUsageWorkbook(
   rangeLabel: string,
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Kherani Lab Bookings";
+  workbook.creator = PRODUCT_TAGLINE;
   workbook.created = new Date();
 
   const exportedAt = formatTz(new Date(), "MMM d, yyyy h:mm a");

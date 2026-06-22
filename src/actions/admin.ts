@@ -7,6 +7,7 @@ import { hashPassword } from "@/lib/password";
 import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
 import { APP_URL } from "@/lib/env";
+import { PRODUCT_NAME } from "@/lib/branding";
 import { UNLIMITED } from "@/lib/booking";
 import { canAdminEditUserRole, canAssignAdminRole, isAccountOwner } from "@/lib/account-owner";
 
@@ -56,7 +57,7 @@ export async function approveUserAction(formData: FormData): Promise<void> {
 
   await sendEmail({
     to: user.email,
-    subject: "Your Kherani Lab booking account is active",
+    subject: `Your ${PRODUCT_NAME} account is active`,
     heading: "Account approved",
     body: "<p>Your account has been approved. You can now sign in and view instrument calendars. An administrator will mark you as trained before you can book.</p>",
     cta: { label: "Sign in", href: `${APP_URL}/login` },
@@ -88,7 +89,7 @@ export async function setUserStatusAction(formData: FormData): Promise<void> {
   if (status === "ACTIVE" && before.status === "DEACTIVATED" && before.email) {
     await sendEmail({
       to: before.email,
-      subject: "Your Kherani Lab booking account is active again",
+      subject: `Your ${PRODUCT_NAME} account is active again`,
       heading: "Account reactivated",
       body: "<p>Your account has been reactivated. You can sign in and use the booking system again.</p>",
       cta: { label: "Sign in", href: `${APP_URL}/login` },

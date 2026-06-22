@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Header } from "@/components/header";
+import { SITE_DESCRIPTION, SITE_TITLE } from "@/lib/branding";
 
 export const metadata: Metadata = {
-  title: "Kherani Lab Instrument Booking System",
-  description: "Reserve shared research instruments in the Kherani Lab.",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

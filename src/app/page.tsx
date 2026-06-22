@@ -3,8 +3,9 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getInstrumentStatus } from "@/lib/instrument-status";
 import { autoSignOutExpiredSessions, processSessionRemindersAndNoShows } from "@/lib/session-lifecycle";
-import { Card, CardBody } from "@/components/ui/card";
+import { LAB_SUBTITLE, PRODUCT_NAME } from "@/lib/branding";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardBody } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,9 @@ export default async function HomePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Welcome, {user.username}</h1>
-        <p className="text-sm text-slate-500">Kherani Lab Instrument Booking System</p>
+        <p className="text-sm text-slate-500">
+          {PRODUCT_NAME} · {LAB_SUBTITLE}
+        </p>
       </div>
 
       {statuses.length === 0 ? (
