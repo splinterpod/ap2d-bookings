@@ -16,6 +16,7 @@ type Instrument = {
   maxSessionMinutes: number;
   advanceBookingDays: number;
   minNoticeMinutes: number;
+  minGapBetweenUserBookingsMinutes: number;
   lateSignInReminderMinutes: number;
   noShowCancelMinutes: number;
   standardHours: unknown;
@@ -118,6 +119,20 @@ export function InstrumentEditor({ instrument }: { instrument: Instrument }) {
             <div>
               <Label>Minimum notice (minutes)</Label>
               <Input type="number" name="minNoticeMinutes" defaultValue={instrument.minNoticeMinutes} min={0} />
+            </div>
+            <div>
+              <Label>Minimum gap between same user&apos;s bookings (hours)</Label>
+              <Input
+                type="number"
+                name="minGapBetweenUserBookingsHours"
+                defaultValue={instrument.minGapBetweenUserBookingsMinutes / 60}
+                min={0}
+                step={0.5}
+              />
+              <p className="mt-1 text-xs text-slate-500">
+                Idle time required between one booking&apos;s end and the same person&apos;s next start on this
+                instrument. Set to 0 to disable. Default is 4 hours.
+              </p>
             </div>
             <div>
               <Label>Late sign-in reminder (minutes after start)</Label>

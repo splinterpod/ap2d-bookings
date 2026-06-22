@@ -21,6 +21,7 @@ import {
   parseStandardHours,
   requiresApproval,
   standardOverlapMinutes,
+  violatesUserBookingGap,
   weeklyUsage,
 } from "@/lib/booking";
 import { notifyNextOnWaitlist } from "./waitlist";
@@ -133,6 +134,22 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   });
   if (overlap) {
     return { error: "That time was just taken. Please choose another slot." };
+  }
+
+  if (instrument.minGapBetweenUserBookingsMinutes > 0) {
+    const myBookings = await prisma.booking.findMany({
+      where: {
+        userId: user.id,
+        instrumentId,
+        status: { in: ["CONFIRMED", "PENDING"] },
+      },
+      select: { startAt: true, endAt: true },
+    });
+    if (violatesUserBookingGap(startAt, endAt, myBookings, instrument.minGapBetweenUserBookingsMinutes)) {
+      return {
+        error: `Your bookings on this instrument must be at least ${formatHours(instrument.minGapBetweenUserBookingsMinutes)} apart.`,
+      };
+    }
   }
 
   let booking;

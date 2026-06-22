@@ -212,3 +212,24 @@ export function formatHours(minutes: number): string {
   if (h) return `${h}h`;
   return `${m}m`;
 }
+
+type BookingInterval = { startAt: Date; endAt: Date };
+
+/** True when [newStart, newEnd] is too close to any of the user's existing bookings. */
+export function violatesUserBookingGap(
+  newStart: Date,
+  newEnd: Date,
+  existing: BookingInterval[],
+  minGapMinutes: number,
+): boolean {
+  if (minGapMinutes <= 0 || existing.length === 0) return false;
+  const minGapMs = minGapMinutes * 60 * 1000;
+  for (const b of existing) {
+    if (newStart >= b.endAt) {
+      if (newStart.getTime() - b.endAt.getTime() < minGapMs) return true;
+    } else if (newEnd <= b.startAt) {
+      if (b.startAt.getTime() - newEnd.getTime() < minGapMs) return true;
+    }
+  }
+  return false;
+}

@@ -25,6 +25,7 @@ async function main() {
       maxSessionMinutes: 240,
       advanceBookingDays: 14,
       minNoticeMinutes: 0,
+      minGapBetweenUserBookingsMinutes: 240,
       cancellationCutoffMinutes: 0,
       standardHours: { days: [1, 2, 3, 4, 5], start: "09:00", end: "17:00" },
       standardHoursWeeklyLimitMinutes: 12 * 60, // 12h/week during standard hours

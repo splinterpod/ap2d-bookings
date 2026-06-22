@@ -99,6 +99,8 @@ model Instrument {
   maxSessionMinutes    Int  @default(240)
   advanceBookingDays   Int  @default(14)
   minNoticeMinutes     Int  @default(0)
+  // Minimum idle time between the same user's bookings on this instrument (prevents hoarding via small gaps).
+  minGapBetweenUserBookingsMinutes Int @default(240)
   cancellationCutoffMinutes Int @default(0)
 
   // Session reminders & no-show handling

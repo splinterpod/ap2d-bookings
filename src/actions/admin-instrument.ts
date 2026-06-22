@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
 import { APP_URL } from "@/lib/env";
+import { formatHours, violatesUserBookingGap } from "@/lib/booking";
 import { formatTz } from "@/lib/time";
 
 function intOrNull(value: FormDataEntryValue | null): number | null {
@@ -55,6 +56,7 @@ export async function updateInstrumentAction(formData: FormData): Promise<void> 
       maxSessionMinutes: (intOrNull(formData.get("maxSessionHours")) ?? 4) * 60,
       advanceBookingDays: intOrNull(formData.get("advanceBookingDays")) ?? 14,
       minNoticeMinutes: intOrNull(formData.get("minNoticeMinutes")) ?? 0,
+      minGapBetweenUserBookingsMinutes: (intOrNull(formData.get("minGapBetweenUserBookingsHours")) ?? 4) * 60,
       lateSignInReminderMinutes: intOrNull(formData.get("lateSignInReminderMinutes")) ?? 15,
       noShowCancelMinutes: intOrNull(formData.get("noShowCancelMinutes")) ?? 30,
       standardHours: {
@@ -107,6 +109,30 @@ export async function approveBookingAction(
   });
   if (overlap) {
     return { error: "Cannot approve — this slot overlaps an existing confirmed booking." };
+  }
+
+  if (booking.instrument.minGapBetweenUserBookingsMinutes > 0) {
+    const userBookings = await prisma.booking.findMany({
+      where: {
+        userId: booking.userId,
+        instrumentId: booking.instrumentId,
+        status: { in: ["CONFIRMED", "PENDING"] },
+        id: { not: id },
+      },
+      select: { startAt: true, endAt: true },
+    });
+    if (
+      violatesUserBookingGap(
+        booking.startAt,
+        booking.endAt,
+        userBookings,
+        booking.instrument.minGapBetweenUserBookingsMinutes,
+      )
+    ) {
+      return {
+        error: `Cannot approve — this user's bookings must be at least ${formatHours(booking.instrument.minGapBetweenUserBookingsMinutes)} apart on this instrument.`,
+      };
+    }
   }
 
   await prisma.booking.update({ where: { id }, data: { status: "CONFIRMED" } });
