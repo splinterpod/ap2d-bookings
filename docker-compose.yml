@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ap2d-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ap2d
+      POSTGRES_PASSWORD: ap2d
+      POSTGRES_DB: ap2d
+    ports:
+      - "5432:5432"
+    volumes:
+      - ap2d_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ap2d"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Optional: local email capture (open http://localhost:8025).
+  # Set RESEND_API_KEY empty to log emails to the app console instead.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: ap2d-mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+
+volumes:
+  ap2d_pgdata:
