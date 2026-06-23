@@ -13,6 +13,7 @@ import {
   setUserRoleAction,
 } from "@/actions/admin";
 import { DeleteUserButton } from "@/components/admin/delete-user-button";
+import { ImpersonateUserButton } from "@/components/admin/impersonate-user-button";
 import { UserManagementBoxes } from "@/components/admin/user-management-boxes";
 import type { SerInstrumentWithDefaults } from "@/components/admin/instrument-limits-dialog";
 import type { SerInstrument, SerTraining } from "@/components/admin/training-history-dialog";
@@ -84,6 +85,7 @@ export default async function AdminUsersPage() {
     const canEditTraining = !isAdminUser;
 
     const canDelete = owner && !isSelf;
+    const canImpersonate = owner && !isSelf;
 
     return (
       <Card key={u.id}>
@@ -92,7 +94,8 @@ export default async function AdminUsersPage() {
             {u.username}{" "}
             <span className="font-normal text-slate-400">· {u.email}</span>
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {canImpersonate && <ImpersonateUserButton userId={u.id} username={u.username} />}
             {canDelete && <DeleteUserButton userId={u.id} username={u.username} />}
             <Badge tone={u.role === "ADMIN" ? "blue" : u.role === "GUEST" ? "amber" : "neutral"}>
               {u.role.toLowerCase()}

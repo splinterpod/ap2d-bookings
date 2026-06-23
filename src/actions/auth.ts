@@ -5,7 +5,14 @@ import { revalidatePath } from "next/cache";
 import { createHash, randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/password";
-import { createSession, destroySession } from "@/lib/session";
+import {
+  clearImpersonatorToken,
+  createSession,
+  destroySession,
+  getImpersonatorRawToken,
+  getRawSessionToken,
+  restoreSessionRawToken,
+} from "@/lib/session";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { rateLimit } from "@/lib/ratelimit";
@@ -20,6 +27,10 @@ import {
 } from "@/lib/validation";
 
 export type FormState = { error?: string; success?: string } | undefined;
+
+function hashToken(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
 
 export async function registerAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = registerSchema.safeParse({
@@ -95,6 +106,23 @@ export async function loginAction(_prev: FormState, formData: FormData): Promise
 }
 
 export async function signOutAction(): Promise<void> {
+  const impersonatorRaw = await getImpersonatorRawToken();
+  if (impersonatorRaw) {
+    const ownerSession = await prisma.authSession.findUnique({
+      where: { token: hashToken(impersonatorRaw) },
+      select: { expiresAt: true },
+    });
+    const raw = await getRawSessionToken();
+    if (raw) {
+      await prisma.authSession.deleteMany({ where: { token: hashToken(raw) } });
+    }
+    if (ownerSession && ownerSession.expiresAt.getTime() > Date.now()) {
+      await restoreSessionRawToken(impersonatorRaw, ownerSession.expiresAt);
+      await clearImpersonatorToken();
+      redirect("/admin/users");
+    }
+  }
+
   await destroySession();
   redirect("/login");
 }
