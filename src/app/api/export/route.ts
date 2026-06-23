@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { formatTz, localToUtc } from "@/lib/time";
@@ -18,21 +19,35 @@ export async function GET(req: NextRequest) {
   const toStr = searchParams.get("to");
   const instrumentSlug = searchParams.get("instrument")?.trim() || null;
   const includeCancelled = searchParams.get("includeCancelled") === "1";
+  const now = new Date();
 
-  const where: {
-    startAt?: { gte?: Date; lte?: Date };
-    instrumentId?: string;
-    status?: "CONFIRMED";
-  } = {};
+  const and: Prisma.BookingWhereInput[] = [
+    // Past or present only — booking slot has started (excludes future reservations).
+    { startAt: { lte: now } },
+  ];
+
+  if (fromStr) {
+    and.push({ startAt: { gte: localToUtc(fromStr, "00:00") } });
+  }
+  if (toStr) {
+    and.push({ startAt: { lte: localToUtc(toStr, "23:59") } });
+  }
 
   if (!includeCancelled) {
-    where.status = "CONFIRMED";
+    and.push({ status: "CONFIRMED" });
+    // Usage export: only bookings where the user signed in (completed or still in progress).
+    and.push({ session: { isNot: null } });
+  } else {
+    and.push({
+      OR: [
+        { status: "CONFIRMED", session: { isNot: null } },
+        { status: "CANCELLED" },
+        { status: "REJECTED" },
+      ],
+    });
   }
-  if (fromStr || toStr) {
-    where.startAt = {};
-    if (fromStr) where.startAt.gte = localToUtc(fromStr, "00:00");
-    if (toStr) where.startAt.lte = localToUtc(toStr, "23:59");
-  }
+
+  const where: Prisma.BookingWhereInput = { AND: and };
 
   if (instrumentSlug) {
     const instrument = await prisma.instrument.findUnique({

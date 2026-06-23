@@ -256,6 +256,10 @@ export function buildRangeLabel(
   else if (toStr) parts.push(`Bookings through ${toStr}`);
   else parts.push("All bookings");
 
-  parts.push(includeCancelled ? "Including cancelled & rejected" : "Confirmed only");
+  parts.push(
+    includeCancelled
+      ? "Including cancelled & rejected · started bookings only"
+      : "Confirmed sessions only · started bookings only",
+  );
   return parts.join(" · ");
 }

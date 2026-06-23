@@ -48,8 +48,10 @@ export default async function AdminExportPage() {
           <Button type="submit">Download Excel</Button>
         </form>
         <p className="text-xs text-slate-500">
-          Leave dates blank to export everything. If no instrument is selected, each instrument gets its own sheet.
-          By default only confirmed bookings are exported.
+          Leave dates blank to export all started bookings. If no instrument is selected, each instrument gets its
+          own sheet. By default only confirmed bookings with a sign-in are exported (completed or in progress).
+          Future reservations are never included. The checkbox adds cancelled and rejected bookings that have
+          started.
         </p>
       </CardBody>
     </Card>
