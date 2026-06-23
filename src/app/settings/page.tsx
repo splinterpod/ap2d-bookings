@@ -48,7 +48,7 @@ export default async function SettingsPage() {
             </label>
             <label className="flex items-center gap-3 text-sm">
               <input type="checkbox" name="notifyReminders" defaultChecked={user.notifyReminders} />
-              Session reminders (1h before, late sign-in, auto sign-out)
+              Session reminders (1h before, late sign-in)
             </label>
             <Button size="sm">Save preferences</Button>
           </form>

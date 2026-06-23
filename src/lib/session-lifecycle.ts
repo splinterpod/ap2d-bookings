@@ -26,8 +26,6 @@ export async function autoSignOutExpiredSessions(now = new Date()): Promise<Auto
 
   if (expired.length === 0) return { count: 0, emailsSent: 0 };
 
-  let emailsSent = 0;
-
   await prisma.$transaction(
     expired.map((s) =>
       prisma.instrumentSession.update({
@@ -47,19 +45,9 @@ export async function autoSignOutExpiredSessions(now = new Date()): Promise<Auto
       where: { id: b.id },
       data: { autoSignedOutNotified: true },
     });
-    if (b.user.notifyReminders) {
-      await sendEmail({
-        to: b.user.email,
-        subject: `Session ended — ${b.instrument.name}`,
-        heading: "Automatically signed out",
-        body: `<p>Your booked session on <strong>${b.instrument.name}</strong> ended at ${formatTz(b.endAt, "h:mm a")} and you were automatically signed out.</p><p>If you are still using the instrument, contact a lab administrator.</p>`,
-        cta: { label: "View my bookings", href: `${APP_URL}/bookings` },
-      });
-      emailsSent++;
-    }
   }
 
-  return { count: expired.length, emailsSent };
+  return { count: expired.length, emailsSent: 0 };
 }
 
 export type SessionCronResult = {
