@@ -14,7 +14,6 @@ export type ExistingReading = { wavelengthNm: number; calibrated: boolean; photo
 type Props = {
   bookingId: string;
   mode: "in" | "out";
-  canRelease?: boolean;
   initialReadings?: ExistingReading[];
   initialSessionNotes?: string | null;
 };
@@ -30,7 +29,7 @@ function initialAlreadyCalibrated(readings: ExistingReading[] | undefined, nm: n
   return !!(existing?.calibrated && existing.photonCount === null);
 }
 
-export function SessionForm({ bookingId, mode, canRelease, initialReadings, initialSessionNotes }: Props) {
+export function SessionForm({ bookingId, mode, initialReadings, initialSessionNotes }: Props) {
   const formRef = useRef<HTMLFormElement>(null);
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<{ tone: "error" | "success"; text: string } | null>(null);
@@ -55,14 +54,13 @@ export function SessionForm({ bookingId, mode, canRelease, initialReadings, init
     }
   }
 
-  function run(skip: boolean) {
+  function run() {
     const form = formRef.current;
     if (!form) return;
     const fd = new FormData(form);
     fd.set("bookingId", bookingId);
-    if (skip) fd.set("skip", "true");
 
-    const validationError = validateLaserSessionForm(fd, skip);
+    const validationError = validateLaserSessionForm(fd, false);
     if (validationError) {
       setMessage({ tone: "error", text: validationError });
       return;
@@ -92,7 +90,11 @@ export function SessionForm({ bookingId, mode, canRelease, initialReadings, init
 
       <fieldset className="space-y-2">
         <legend className="text-sm font-medium text-slate-700">Lasers used this session</legend>
-        <p className="text-xs text-slate-500">Check each laser you will use. You can update these when you sign out.</p>
+        <p className="text-xs text-slate-500">
+          {mode === "in"
+            ? "Check each laser you will use."
+            : "Review or update lasers and calibration, then confirm sign-out."}
+        </p>
         <div className="flex flex-wrap gap-x-5 gap-y-2">
           {LASER_WAVELENGTHS.map((nm) => (
             <label key={nm} className="flex items-center gap-2 text-sm font-medium text-slate-800">
@@ -177,23 +179,15 @@ export function SessionForm({ bookingId, mode, canRelease, initialReadings, init
         />
       </div>
 
-      {mode === "out" && canRelease && (
-        <label className="flex items-center gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-          <input type="checkbox" name="release" value="true" />
-          I&apos;m done early — release my remaining booked time for others.
-        </label>
+      {mode === "out" && (
+        <p className="text-xs text-slate-500">
+          Signing out releases any remaining booked time on the calendar for others.
+        </p>
       )}
 
-      <div className={mode === "in" ? "" : "flex flex-col gap-2 sm:flex-row"}>
-        <Button type="button" className="flex-1" disabled={isPending} onClick={() => run(false)}>
-          {isPending ? "Working…" : mode === "in" ? "Sign in to session" : "Confirm & sign out"}
-        </Button>
-        {mode === "out" && (
-          <Button type="button" variant="outline" disabled={isPending} onClick={() => run(true)}>
-            Skip
-          </Button>
-        )}
-      </div>
+      <Button type="button" className="w-full sm:w-auto" disabled={isPending} onClick={() => run()}>
+        {isPending ? "Working…" : mode === "in" ? "Sign in to session" : "Confirm & sign out"}
+      </Button>
     </form>
   );
 }

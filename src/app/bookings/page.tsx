@@ -63,7 +63,7 @@ export default async function BookingsPage() {
           const signInOpen = addMinutes(b.startAt, -15);
           const needsSignIn = b.status === "CONFIRMED" && now >= signInOpen && now <= b.endAt && !b.session;
           const canSignOut = b.session && !b.session.signedOutAt;
-          const canRelease = now < addMinutes(b.endAt, -30) && now > b.startAt;
+          const releasedEarly = b.session?.signedOutAt && b.scheduledEndAt > b.endAt;
           const sessionReadings: ExistingReading[] = b.session
             ? finalLaserReadings(b.session.readings).map((r) => ({
                 wavelengthNm: r.wavelengthNm,
@@ -82,7 +82,10 @@ export default async function BookingsPage() {
                 <div className="text-sm text-slate-700">
                   <div className="font-medium">{formatTz(b.startAt, "EEEE, MMMM d, yyyy")}</div>
                   <div>
-                    {formatTz(b.startAt, "h:mm a")} – {formatTz(b.endAt, "h:mm a")}
+                    {formatTz(b.startAt, "h:mm a")} –{" "}
+                    {releasedEarly
+                      ? `${formatTz(b.endAt, "h:mm a")} (released; booked until ${formatTz(b.scheduledEndAt, "h:mm a")})`
+                      : formatTz(b.scheduledEndAt, "h:mm a")}
                   </div>
                   {b.notes && <p className="mt-1 text-slate-500">Notes: {b.notes}</p>}
                 </div>
@@ -108,7 +111,6 @@ export default async function BookingsPage() {
                     <SessionForm
                       bookingId={b.id}
                       mode="out"
-                      canRelease={!!canRelease}
                       initialReadings={sessionReadings}
                       initialSessionNotes={b.session?.notes}
                     />
@@ -146,7 +148,10 @@ export default async function BookingsPage() {
             <div>
               <div className="font-medium text-slate-800">{b.instrument.name}</div>
               <div className="text-slate-500">
-                {formatTz(b.startAt, "MMM d, yyyy · h:mm a")} – {formatTz(b.endAt, "h:mm a")}
+                {formatTz(b.startAt, "MMM d, yyyy · h:mm a")} –{" "}
+                {b.scheduledEndAt > b.endAt
+                  ? `${formatTz(b.endAt, "h:mm a")} (booked until ${formatTz(b.scheduledEndAt, "h:mm a")})`
+                  : formatTz(b.scheduledEndAt, "h:mm a")}
               </div>
             </div>
             <div className="flex items-center gap-2">

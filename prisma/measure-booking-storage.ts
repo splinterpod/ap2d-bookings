@@ -65,6 +65,7 @@ async function createTestBookings(userId: string, instrumentId: string) {
         userId,
         startAt,
         endAt,
+        scheduledEndAt: endAt,
         status: "CONFIRMED",
         notes: `Test booking #${i + 1} — sample notes for storage measurement.`,
         reminder1Sent: true,

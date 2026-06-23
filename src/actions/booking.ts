@@ -155,7 +155,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   let booking;
   try {
     booking = await prisma.booking.create({
-      data: { instrumentId, userId: user.id, startAt, endAt, notes, status },
+      data: { instrumentId, userId: user.id, startAt, endAt, scheduledEndAt: endAt, notes, status },
     });
   } catch (err) {
     if (

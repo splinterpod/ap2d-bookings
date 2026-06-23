@@ -91,6 +91,7 @@ export async function signInSessionAction(_prev: FormState, formData: FormData):
   await audit(user.id, "session.sign_in", { type: "booking", id: booking.id }, {});
 
   revalidatePath("/bookings");
+  revalidatePath("/calendar");
   revalidatePath("/");
   return { success: "Signed in. Enjoy your session." };
 }
@@ -98,10 +99,8 @@ export async function signInSessionAction(_prev: FormState, formData: FormData):
 export async function signOutSessionAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const user = await requireUser();
   const bookingId = String(formData.get("bookingId"));
-  const skipped = formData.get("skip") === "true";
-  const release = formData.get("release") === "true";
 
-  const validationError = validateLaserSessionForm(formData, skipped);
+  const validationError = validateLaserSessionForm(formData, false);
   if (validationError) return { error: validationError };
 
   const booking = await prisma.booking.findUnique({
@@ -115,40 +114,43 @@ export async function signOutSessionAction(_prev: FormState, formData: FormData)
   const now = new Date();
   await autoSignOutExpiredSessions(now);
 
-  const readings = skipped ? [] : readLaserSessionReadings(formData, "SIGN_OUT");
+  const readings = readLaserSessionReadings(formData, "SIGN_OUT");
   const { laserTurnedOn, laserAlreadyOn } = deriveLaserFlags(readings);
   const notes = parseSessionNotes(formData);
+  const scheduledEnd = booking.scheduledEndAt;
+  const freedSlot = now < scheduledEnd;
 
   await prisma.$transaction(async (tx) => {
+    await tx.sessionLaserReading.deleteMany({ where: { sessionId: booking.session!.id } });
+
     await tx.instrumentSession.update({
       where: { id: booking.session!.id },
       data: {
         signedOutAt: now,
         actualEndAt: now,
-        signOutSkipped: skipped,
+        signOutSkipped: false,
         notes,
-        ...(skipped
-          ? {}
-          : {
-              laserTurnedOn,
-              laserAlreadyOn,
-            }),
-        readings: skipped ? undefined : { create: readings },
+        laserTurnedOn,
+        laserAlreadyOn,
+        readings: { create: readings },
       },
     });
 
-    if (release && now < addMinutes(booking.endAt, -30) && now > booking.startAt) {
+    if (freedSlot) {
       await tx.booking.update({ where: { id: booking.id }, data: { endAt: now } });
     }
   });
 
-  await audit(user.id, "session.sign_out", { type: "booking", id: booking.id }, { skipped, release });
+  await audit(user.id, "session.sign_out", { type: "booking", id: booking.id }, {
+    releasedEarly: freedSlot,
+  });
 
-  if (release) {
-    await notifyNextOnWaitlist(booking.instrumentId, now, booking.endAt);
+  if (freedSlot) {
+    await notifyNextOnWaitlist(booking.instrumentId, now, scheduledEnd);
   }
 
   revalidatePath("/bookings");
+  revalidatePath("/calendar");
   revalidatePath("/");
   return { success: "Signed out. Thank you." };
 }

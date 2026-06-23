@@ -161,6 +161,8 @@ model Booking {
   userId       String
   startAt      DateTime
   endAt        DateTime
+  // Original booked end; endAt may be shortened early on sign-out to free the calendar slot.
+  scheduledEndAt DateTime
   status       BookingStatus @default(CONFIRMED)
   notes        String?
   noShow       Boolean       @default(false)

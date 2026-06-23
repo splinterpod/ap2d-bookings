@@ -67,8 +67,14 @@ export function deriveLaserFlags(readings: LaserReadingInput[]) {
   };
 }
 
-/** Prefer sign-out readings; fall back to sign-in for each wavelength. */
-export function finalLaserReadings(readings: LaserReading[]): LaserReading[] {
+/** Prefer sign-out readings when the session is complete; otherwise sign-out then sign-in. */
+export function finalLaserReadings(readings: LaserReading[], sessionComplete = false): LaserReading[] {
+  if (sessionComplete) {
+    return LASER_WAVELENGTHS.flatMap((nm) => {
+      const reading = readings.find((r) => r.wavelengthNm === nm && r.phase === "SIGN_OUT");
+      return reading ? [reading] : [];
+    });
+  }
   return LASER_WAVELENGTHS.flatMap((nm) => {
     const reading =
       readings.find((r) => r.wavelengthNm === nm && r.phase === "SIGN_OUT") ??
@@ -114,12 +120,14 @@ export function laserCountForExport(
   readings: LaserReading[],
   nm: number,
   signInSkipped: boolean,
+  sessionComplete = false,
 ): string {
   if (signInSkipped) return "Not used";
 
-  const reading =
-    readings.find((r) => r.wavelengthNm === nm && r.phase === "SIGN_OUT") ??
-    readings.find((r) => r.wavelengthNm === nm && r.phase === "SIGN_IN");
+  const reading = sessionComplete
+    ? readings.find((r) => r.wavelengthNm === nm && r.phase === "SIGN_OUT")
+    : readings.find((r) => r.wavelengthNm === nm && r.phase === "SIGN_OUT") ??
+      readings.find((r) => r.wavelengthNm === nm && r.phase === "SIGN_IN");
 
   if (!reading) return "Not used";
   if (reading.photonCount === null) return "Already calibrated";

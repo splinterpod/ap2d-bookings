@@ -9,6 +9,7 @@ export type ExportBooking = {
   id: string;
   startAt: Date;
   endAt: Date;
+  scheduledEndAt: Date;
   status: BookingStatus;
   notes: string | null;
   noShow: boolean;
@@ -61,9 +62,12 @@ function cellText(value: ExcelJS.CellValue): string {
   return String(value);
 }
 
-function laserCount(session: NonNullable<ExportBooking["session"]> | null, nm: number): string {
-  if (!session) return "Not used";
-  return laserCountForExport(session.readings, nm, session.signInSkipped);
+function laserCount(
+  session: NonNullable<ExportBooking["session"]>,
+  nm: number,
+  sessionComplete: boolean,
+): string {
+  return laserCountForExport(session.readings, nm, session.signInSkipped, sessionComplete);
 }
 
 function sessionNotesLabel(notes: string | null | undefined): string {
@@ -80,6 +84,7 @@ function baseColumns(raman: boolean): string[] {
     "Booked start",
     "Booked end",
     "Booked duration",
+    "Calendar slot end",
     "Status",
     "Booking notes",
     "Signed in",
@@ -97,17 +102,19 @@ function baseColumns(raman: boolean): string[] {
 
 function bookingRow(b: ExportBooking, raman: boolean): (string | number)[] {
   const s = b.session;
-  const bookedMins = Math.round((b.endAt.getTime() - b.startAt.getTime()) / 60000);
+  const bookedMins = Math.round((b.scheduledEndAt.getTime() - b.startAt.getTime()) / 60000);
   const sessionMins =
     s?.signedInAt && s.signedOutAt
       ? Math.round((s.signedOutAt.getTime() - s.signedInAt.getTime()) / 60000)
       : null;
+  const sessionComplete = !!s?.signedOutAt;
 
   const row: (string | number)[] = [
     b.user.username,
     formatTz(b.startAt, DATE_FMT),
-    formatTz(b.endAt, DATE_FMT),
+    formatTz(b.scheduledEndAt, DATE_FMT),
     fmtDuration(bookedMins),
+    formatTz(b.endAt, DATE_FMT),
     statusLabel(b.status),
     b.notes?.trim() || "—",
     s ? formatTz(s.signedInAt, DATE_FMT) : "—",
@@ -117,7 +124,7 @@ function bookingRow(b: ExportBooking, raman: boolean): (string | number)[] {
 
   if (raman) {
     for (const nm of LASER_WAVELENGTHS) {
-      row.push(s ? laserCount(s, nm) : "Not used");
+      row.push(s ? laserCount(s, nm, sessionComplete) : "Not used");
     }
   }
   row.push(s ? sessionNotesLabel(s.notes) : "—");
