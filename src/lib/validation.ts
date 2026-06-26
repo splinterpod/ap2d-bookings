@@ -90,6 +90,11 @@ export const createBookingSchema = z.object({
   targetUserId: z.string().min(1).optional(),
 });
 
+export const extendBookingSchema = z.object({
+  bookingId: z.string().min(1),
+  newEndAt: z.string().datetime(),
+});
+
 const photonField = z
   .union([z.coerce.number().nonnegative(), z.literal("").transform(() => null), z.null()])
   .optional();

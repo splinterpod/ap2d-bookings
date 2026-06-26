@@ -7,7 +7,14 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
 import { APP_URL } from "@/lib/env";
-import { createBookingSchema } from "@/lib/validation";
+import { createBookingSchema, extendBookingSchema } from "@/lib/validation";
+import {
+  findOngoingBooking,
+  instrumentInUse,
+  maxFreeEndAt,
+  resolveBookingExtension,
+  validateBookingExtension,
+} from "@/lib/booking-extension";
 import { addMinutes, formatTz, localToUtc, clockTime, parseClock } from "@/lib/time";
 import {
   BOOKING_GRID_MINUTES,
@@ -48,28 +55,43 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   if (instrument.maintenance) return { error: "This instrument is under maintenance and cannot be booked." };
 
   const isAdmin = user.role === "ADMIN";
+  const isTrained =
+    isAdmin ||
+    !!(await prisma.instrumentTraining.findUnique({
+      where: { userId_instrumentId: { userId: user.id, instrumentId } },
+    }));
+
+  const walkUp = formData.get("walkUp") === "1";
+  let bookForUserId = user.id;
+  let bookForUser = user;
+
   if (instrument.bookingAdminMode) {
-    if (!isAdmin) {
-      return { error: "Bookings on this instrument are managed by administrators." };
+    if (isAdmin) {
+      if (walkUp) {
+        return { error: "Use the booking form to schedule in advance for a user." };
+      }
+      if (!targetUserId) return { error: "Select a user for this booking." };
+      bookForUserId = targetUserId;
+      if (targetUserId !== user.id) {
+        const u = await prisma.user.findUnique({ where: { id: targetUserId } });
+        if (!u || u.status !== "ACTIVE") return { error: "Selected user is not active." };
+        bookForUser = u;
+      }
+    } else {
+      if (!walkUp) {
+        return { error: "Only walk-up bookings from now are available on this instrument." };
+      }
+      if (!isTrained) {
+        return { error: "You are not yet trained on this instrument. Contact a lab administrator." };
+      }
     }
-    if (!targetUserId) return { error: "Select a user for this booking." };
   } else if (targetUserId) {
     return { error: "Invalid booking request." };
-  }
-
-  const bookForUserId = instrument.bookingAdminMode ? targetUserId! : user.id;
-  const bookForUser =
-    instrument.bookingAdminMode && targetUserId !== user.id
-      ? await prisma.user.findUnique({ where: { id: targetUserId } })
-      : user;
-  if (!bookForUser || bookForUser.status !== "ACTIVE") {
-    return { error: "Selected user is not active." };
   }
 
   const startAt = localToUtc(date, startTime);
   const endAt = addMinutes(startAt, durationMinutes);
   const now = new Date();
-  const walkUp = formData.get("walkUp") === "1";
 
   if (endAt <= now) {
     return { error: "Choose a duration that ends in the future." };
@@ -87,7 +109,20 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   if (walkUp) {
     const currentBlock = nowBlockStart(parseClock(clockTime(now)), BOOKING_GRID_MINUTES);
     if (startMinutes < currentBlock) {
-      return { error: "That walk-up slot has passed. Choose a later time." };
+      return { error: "That walk-up slot has passed. Refresh the page." };
+    }
+    if (instrument.bookingAdminMode && !isAdmin) {
+      const ongoing = await findOngoingBooking(bookForUserId, instrumentId, now);
+      if (ongoing) {
+        return { error: "You have an ongoing booking. Extend it instead." };
+      }
+      if (await instrumentInUse(instrumentId)) {
+        return { error: "The instrument is in use right now." };
+      }
+      const maxEnd = await maxFreeEndAt(instrumentId, startAt, startAt, instrument);
+      if (endAt > maxEnd) {
+        return { error: "That duration extends into the next booking." };
+      }
     }
   } else if (startAt < now) {
     return { error: "Start time is in the past. Refresh the page for current slots." };
@@ -95,6 +130,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
 
   if (
     !walkUp &&
+    !instrument.bookingAdminMode &&
     instrument.minNoticeMinutes > 0 &&
     startAt < addMinutes(now, instrument.minNoticeMinutes)
   ) {
@@ -103,7 +139,9 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     };
   }
 
-  if (durationMinutes > instrument.maxSessionMinutes) {
+  if (instrument.bookingAdminMode && walkUp && !isAdmin) {
+    // No max session cap for member walk-up in admin mode.
+  } else if (durationMinutes > instrument.maxSessionMinutes) {
     return { error: `Maximum session length is ${formatHours(instrument.maxSessionMinutes)}.` };
   }
   const maxFuture = addMinutes(now, instrument.advanceBookingDays * 24 * 60);
@@ -111,12 +149,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     return { error: `Bookings can be made up to ${instrument.advanceBookingDays} days in advance.` };
   }
 
-  // Training gate (admin-mode bookings skip — admin assigns users directly)
-  const isTrained =
-    user.role === "ADMIN" ||
-    !!(await prisma.instrumentTraining.findUnique({
-      where: { userId_instrumentId: { userId: user.id, instrumentId } },
-    }));
+  // Training gate (normal mode only; admin-mode members checked above)
   if (!instrument.bookingAdminMode && !isTrained) {
     return { error: "You are not yet trained on this instrument. Contact a lab administrator." };
   }
@@ -215,12 +248,72 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   revalidatePath("/bookings");
   revalidatePath("/");
   return {
-    success: instrument.bookingAdminMode
-      ? "Booking created for the selected user."
-      : needsApproval
-        ? "Booking submitted. An administrator will review it shortly."
-        : "Booking confirmed.",
+    success: instrument.bookingAdminMode && !isAdmin
+      ? "Booking confirmed."
+      : instrument.bookingAdminMode
+        ? "Booking created for the selected user."
+        : needsApproval
+          ? "Booking submitted. An administrator will review it shortly."
+          : "Booking confirmed.",
   };
+}
+
+export async function extendBookingAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const user = await requireUser();
+  if (user.status !== "ACTIVE") return { error: "Your account is not active." };
+
+  const parsed = extendBookingSchema.safeParse({
+    bookingId: formData.get("bookingId"),
+    newEndAt: formData.get("newEndAt"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid extension." };
+  const { bookingId, newEndAt: newEndAtIso } = parsed.data;
+  const newEndAt = new Date(newEndAtIso);
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { instrument: true, session: { select: { signedOutAt: true } } },
+  });
+  if (!booking) return { error: "Booking not found." };
+  if (!booking.instrument.bookingAdminMode) {
+    return { error: "Extensions are only available in booking admin mode." };
+  }
+
+  const isAdmin = user.role === "ADMIN";
+  if (booking.userId !== user.id && !isAdmin) {
+    return { error: "You can only extend your own bookings." };
+  }
+
+  const info = await resolveBookingExtension(booking, booking.instrument, user.id, isAdmin);
+  if (!info.canExtend) {
+    return { error: info.reason ?? "This booking cannot be extended right now." };
+  }
+  if (!info.options.some((o) => new Date(o.newEndAtIso).getTime() === newEndAt.getTime())) {
+    return { error: "Choose a valid extension from the list." };
+  }
+
+  const validation = await validateBookingExtension(
+    booking,
+    booking.instrument,
+    booking.userId,
+    newEndAt,
+  );
+  if (!validation.ok) return { error: validation.error };
+
+  await prisma.booking.update({
+    where: { id: bookingId },
+    data: { endAt: newEndAt, scheduledEndAt: newEndAt },
+  });
+  await audit(user.id, "booking.extend", { type: "booking", id: bookingId }, {
+    newEndAt: newEndAt.toISOString(),
+    byAdmin: isAdmin && booking.userId !== user.id,
+  });
+
+  revalidatePath("/calendar");
+  revalidatePath("/bookings");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/");
+  return { success: `Booking extended until ${formatTz(newEndAt, "h:mm a")}.` };
 }
 
 export async function cancelBookingAction(formData: FormData): Promise<void> {

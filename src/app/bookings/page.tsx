@@ -5,7 +5,9 @@ import { addMinutes, formatTz } from "@/lib/time";
 import { cancelBookingAction } from "@/actions/booking";
 import { SessionForm, type ExistingReading } from "@/components/session-form";
 import { CancelBookingButton } from "@/components/cancel-booking-button";
+import { ExtendBookingForm } from "@/components/extend-booking-form";
 import { finalLaserReadings } from "@/lib/laser-session";
+import { resolveBookingExtension } from "@/lib/booking-extension";
 import { autoSignOutExpiredSessions, processSessionRemindersAndNoShows } from "@/lib/session-lifecycle";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +45,21 @@ export default async function BookingsPage() {
   const upcoming = bookings
     .filter((b) => b.endAt >= now && b.status !== "CANCELLED" && b.status !== "REJECTED")
     .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+
+  const extensionByBookingId = new Map(
+    (
+      await Promise.all(
+        upcoming.map(async (b) => {
+          if (!b.instrument.bookingAdminMode) return null;
+          if (b.startAt > now || b.endAt <= now) return null;
+          if (b.session?.signedOutAt) return null;
+          const info = await resolveBookingExtension(b, b.instrument, user.id, user.role === "ADMIN", now);
+          if (!info.canExtend) return null;
+          return [b.id, info] as const;
+        }),
+      )
+    ).filter((x): x is [string, Awaited<ReturnType<typeof resolveBookingExtension>>] => x !== null),
+  );
   const past = bookings.filter(
     (b) => b.endAt < now || b.status === "CANCELLED" || b.status === "REJECTED",
   );
@@ -64,6 +81,7 @@ export default async function BookingsPage() {
           const needsSignIn = b.status === "CONFIRMED" && now >= signInOpen && now <= b.endAt && !b.session;
           const canSignOut = b.session && !b.session.signedOutAt;
           const releasedEarly = b.session?.signedOutAt && b.scheduledEndAt > b.endAt;
+          const extension = extensionByBookingId.get(b.id);
           const sessionReadings: ExistingReading[] = b.session
             ? finalLaserReadings(b.session.readings).map((r) => ({
                 wavelengthNm: r.wavelengthNm,
@@ -115,6 +133,14 @@ export default async function BookingsPage() {
                       initialSessionNotes={b.session?.notes}
                     />
                   </div>
+                )}
+
+                {extension && (
+                  <ExtendBookingForm
+                    bookingId={extension.bookingId}
+                    currentEndLabel={extension.currentEndLabel}
+                    options={extension.options}
+                  />
                 )}
 
                 {!b.session && !needsSignIn && b.status === "CONFIRMED" && now < signInOpen && (

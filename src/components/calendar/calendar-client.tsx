@@ -16,6 +16,21 @@ import {
 } from "@/components/calendar/calendar-drag";
 import { useLiveAppNow } from "@/components/calendar/use-live-app-now";
 import { buildStartSlotOptions, formatMinuteLabel } from "@/lib/booking-grid";
+import { MemberUseNowPanel } from "@/components/member-use-now-panel";
+
+type MemberNowState = {
+  extension: {
+    bookingId: string;
+    currentEndLabel: string;
+    options: { newEndAtIso: string; label: string; extraMinutes: number }[];
+  } | null;
+  bookNow: {
+    dateKey: string;
+    startMin: number;
+    durationOptions: { minutes: number; endLabel: string }[];
+  } | null;
+  unavailableReason?: string;
+};
 import { Button } from "@/components/ui/button";
 import { Label, Select, Textarea } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
@@ -69,6 +84,7 @@ type Props = {
   limitMinutes: number | null;
   usedStandardMinutes: number;
   myWaitlist: { id: string; startKey: string; startMin: number }[];
+  memberNowState?: MemberNowState | null;
 };
 
 const HOUR_PX = 44;
@@ -104,6 +120,7 @@ export function CalendarClient(props: Props) {
     bookableUsers,
     limitMinutes,
     usedStandardMinutes,
+    memberNowState,
   } = props;
   const liveNow = useLiveAppNow(appTimezone, { dateKey: nowKey, minutes: nowMin });
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -316,6 +333,12 @@ export function CalendarClient(props: Props) {
     });
   }
 
+  const showMemberPanel =
+    instrument.bookingAdminMode &&
+    !canBook &&
+    memberNowState &&
+    (memberNowState.extension || memberNowState.bookNow || memberNowState.unavailableReason);
+
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -517,7 +540,11 @@ export function CalendarClient(props: Props) {
           {instrument.bookingAdminMode
             ? canBook
               ? "Book for user"
-              : "See calendar"
+              : showMemberPanel
+                ? memberNowState?.extension
+                  ? "Extend booking"
+                  : "Use now"
+                : "See calendar"
             : "Book a session"}
         </h2>
 
@@ -528,12 +555,19 @@ export function CalendarClient(props: Props) {
           </p>
         )}
 
-        {!canBook ? (
+        {!canBook && !showMemberPanel ? (
           <Alert tone="info">
             {instrument.bookingAdminMode
               ? "View availability on the calendar. Contact an administrator to schedule time on this instrument."
               : "Booking is unavailable for you on this instrument right now."}
           </Alert>
+        ) : showMemberPanel && memberNowState ? (
+          <MemberUseNowPanel
+            instrumentId={instrument.id}
+            extension={memberNowState.extension}
+            bookNow={memberNowState.bookNow}
+            unavailableReason={memberNowState.unavailableReason}
+          />
         ) : (
           <div className="space-y-3">
             {message && <Alert tone={message.tone}>{message.text}</Alert>}
