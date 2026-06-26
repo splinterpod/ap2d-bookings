@@ -68,7 +68,7 @@ export function InstrumentEditor({ instrument }: { instrument: Instrument }) {
             </Button>
             <p className="mt-2 text-xs text-slate-500">
               When enabled, only admins can book (selecting a user). Members see the calendar but cannot self-book.
-              No-show bookings stay on the calendar instead of being auto-cancelled.
+              Bookings are never auto-cancelled or auto-tagged as no-show.
             </p>
           </form>
         </CardBody>
@@ -173,7 +173,7 @@ export function InstrumentEditor({ instrument }: { instrument: Instrument }) {
               />
               <p className="mt-1 text-xs text-slate-500">
                 {instrument.bookingAdminMode
-                  ? "Tag as no-show if still not signed in after this many minutes. The booking stays on the calendar."
+                  ? "Not used in booking admin mode — no automatic no-show tagging or cancellation."
                   : "Cancel the booking if still not signed in after this many minutes (frees the slot)."}
               </p>
             </div>

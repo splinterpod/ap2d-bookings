@@ -102,43 +102,36 @@ export async function processSessionRemindersAndNoShows(now = new Date()): Promi
       lateSignInReminders++;
     }
 
-    // No-show: auto-cancel in normal mode; tag only in booking admin mode (booking stays on calendar).
-    const noShowThreshold = addMinutes(now, -inst.noShowCancelMinutes);
-    const noShows = await prisma.booking.findMany({
-      where: {
-        instrumentId: inst.id,
-        status: "CONFIRMED",
-        noShow: false,
-        startAt: { lte: noShowThreshold },
-        endAt: { gt: now },
-        session: { is: null },
-      },
-      include: { user: true, instrument: { select: { name: true, slug: true, bookingAdminMode: true } } },
-    });
+    // No-show auto-cancel (skipped entirely in booking admin mode — admin manages attendance).
+    if (!inst.bookingAdminMode) {
+      const noShowThreshold = addMinutes(now, -inst.noShowCancelMinutes);
+      const noShows = await prisma.booking.findMany({
+        where: {
+          instrumentId: inst.id,
+          status: "CONFIRMED",
+          noShow: false,
+          startAt: { lte: noShowThreshold },
+          endAt: { gt: now },
+          session: { is: null },
+        },
+        include: { user: true, instrument: { select: { name: true, slug: true } } },
+      });
 
-    for (const b of noShows) {
-      if (inst.bookingAdminMode) {
+      for (const b of noShows) {
         await prisma.booking.update({
           where: { id: b.id },
-          data: { noShow: true },
+          data: { status: "CANCELLED", noShow: true },
+        });
+        await notifyNextOnWaitlist(b.instrumentId, b.startAt, b.endAt);
+        await sendEmail({
+          to: b.user.email,
+          subject: `Booking cancelled — no sign-in — ${b.instrument.name}`,
+          heading: "Booking cancelled (no sign-in)",
+          body: `<p>Your booking on <strong>${b.instrument.name}</strong> (${formatTz(b.startAt, "EEE MMM d, h:mm a")} – ${formatTz(b.endAt, "h:mm a")}) was automatically cancelled because you did not sign in within ${inst.noShowCancelMinutes} minutes of the start time.</p>`,
+          cta: { label: "Book again", href: `${APP_URL}/calendar?instrument=${b.instrument.slug}` },
         });
         noShowCancellations++;
-        continue;
       }
-
-      await prisma.booking.update({
-        where: { id: b.id },
-        data: { status: "CANCELLED", noShow: true },
-      });
-      await notifyNextOnWaitlist(b.instrumentId, b.startAt, b.endAt);
-      await sendEmail({
-        to: b.user.email,
-        subject: `Booking cancelled — no sign-in — ${b.instrument.name}`,
-        heading: "Booking cancelled (no sign-in)",
-        body: `<p>Your booking on <strong>${b.instrument.name}</strong> (${formatTz(b.startAt, "EEE MMM d, h:mm a")} – ${formatTz(b.endAt, "h:mm a")}) was automatically cancelled because you did not sign in within ${inst.noShowCancelMinutes} minutes of the start time.</p>`,
-        cta: { label: "Book again", href: `${APP_URL}/calendar?instrument=${b.instrument.slug}` },
-      });
-      noShowCancellations++;
     }
   }
 
@@ -148,7 +141,13 @@ export async function processSessionRemindersAndNoShows(now = new Date()): Promi
 /** Flag ended bookings that never had a session (after the slot fully passed). */
 export async function flagPastNoShows(now = new Date()): Promise<number> {
   const noShows = await prisma.booking.findMany({
-    where: { status: "CONFIRMED", noShow: false, endAt: { lt: now }, session: { is: null } },
+    where: {
+      status: "CONFIRMED",
+      noShow: false,
+      endAt: { lt: now },
+      session: { is: null },
+      instrument: { bookingAdminMode: false },
+    },
     select: { id: true },
   });
   if (noShows.length === 0) return 0;
