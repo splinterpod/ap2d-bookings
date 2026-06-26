@@ -58,9 +58,13 @@ export default async function HomePage() {
                 <div className="flex shrink-0 gap-2">
                   <Link
                     href={`/calendar?instrument=${instrument.slug}`}
-                    className="rounded-lg bg-brand-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-800"
+                    className={`rounded-lg px-4 py-2.5 text-sm font-semibold ${
+                      instrument.bookingAdminMode && !isAdmin
+                        ? "border border-slate-300 text-slate-700 hover:bg-slate-50"
+                        : "bg-brand-700 text-white hover:bg-brand-800"
+                    }`}
                   >
-                    Book a session
+                    {instrument.bookingAdminMode && !isAdmin ? "See calendar" : "Book a session"}
                   </Link>
                   <Link
                     href="/bookings"

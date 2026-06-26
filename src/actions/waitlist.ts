@@ -20,6 +20,12 @@ export async function joinWaitlistAction(formData: FormData): Promise<void> {
   const durationMinutes = Number(formData.get("durationMinutes"));
   if (!instrumentId || !date || !startTime || !durationMinutes) return;
 
+  const instrument = await prisma.instrument.findUnique({
+    where: { id: instrumentId },
+    select: { bookingAdminMode: true },
+  });
+  if (!instrument || instrument.bookingAdminMode) return;
+
   // Only trained users may join (mirrors booking permission).
   const isTrained =
     user.role === "ADMIN" ||

@@ -93,6 +93,8 @@ model Instrument {
   instrumentType String @default("raman")
 
   maintenance Boolean @default(false)
+  // When enabled, only admins book (on behalf of a selected user); bookings stay on calendar after no-show.
+  bookingAdminMode Boolean @default(false)
 
   // Booking rules
   slotMinutes          Int  @default(30)

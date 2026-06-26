@@ -74,12 +74,22 @@ export default async function CalendarPage({
   });
 
   const isAdmin = user.role === "ADMIN";
+  const bookingAdminMode = instrument.bookingAdminMode;
   const showBookerNames = user.role !== "GUEST";
   const isTrained =
     isAdmin ||
     !!(await prisma.instrumentTraining.findUnique({
       where: { userId_instrumentId: { userId: user.id, instrumentId: instrument.id } },
     }));
+
+  const bookableUsers =
+    bookingAdminMode && isAdmin
+      ? await prisma.user.findMany({
+          where: { status: "ACTIVE" },
+          select: { id: true, username: true },
+          orderBy: { username: "asc" },
+        })
+      : [];
 
   const bookings = await prisma.booking.findMany({
     where: {
@@ -96,6 +106,7 @@ export default async function CalendarPage({
     id: b.id,
     mine: b.userId === user.id,
     status: b.status,
+    noShow: b.noShow,
     ownerLabel: showBookerNames
       ? b.userId === user.id
         ? "You"
@@ -166,7 +177,13 @@ export default async function CalendarPage({
       {instrument.maintenance && (
         <Alert tone="warning">This instrument is currently under maintenance and cannot be booked.</Alert>
       )}
-      {!isTrained && (
+      {bookingAdminMode && !isAdmin && (
+        <Alert tone="info">
+          Bookings on this instrument are scheduled by administrators. View the calendar below; contact an admin to
+          request time.
+        </Alert>
+      )}
+      {!bookingAdminMode && !isTrained && (
         <Alert tone="info">
           You can view availability, but you are not yet trained on this instrument, so you cannot book.
           Contact a lab administrator.
@@ -192,12 +209,14 @@ export default async function CalendarPage({
           advanceBookingDays: instrument.advanceBookingDays,
           minNoticeMinutes: instrument.minNoticeMinutes,
           maintenance: instrument.maintenance,
+          bookingAdminMode,
         }}
         days={days}
         bookings={serBookings}
-        canBook={isTrained && !instrument.maintenance}
+        canBook={!instrument.maintenance && (bookingAdminMode ? isAdmin : isTrained)}
         isAdmin={isAdmin}
         showBookerNames={showBookerNames}
+        bookableUsers={bookableUsers}
         limitMinutes={limit}
         usedStandardMinutes={usage.standardMinutes}
         myWaitlist={myWaitlist.map((w) => ({

@@ -25,6 +25,7 @@ export type SerBooking = {
   id: string;
   mine: boolean;
   status: "CONFIRMED" | "PENDING" | "CANCELLED" | "REJECTED";
+  noShow: boolean;
   ownerLabel?: string;
   startKey: string;
   startMin: number;
@@ -57,12 +58,14 @@ type Props = {
     advanceBookingDays: number;
     minNoticeMinutes: number;
     maintenance: boolean;
+    bookingAdminMode: boolean;
   };
   days: Day[];
   bookings: SerBooking[];
   canBook: boolean;
   isAdmin: boolean;
   showBookerNames: boolean;
+  bookableUsers: { id: string; username: string }[];
   limitMinutes: number | null;
   usedStandardMinutes: number;
   myWaitlist: { id: string; startKey: string; startMin: number }[];
@@ -89,8 +92,19 @@ function fmtHourGutter(h: number): string {
 }
 
 export function CalendarClient(props: Props) {
-  const { appTimezone, nowKey, nowMin, weekNav, instrument, days, bookings, canBook, limitMinutes, usedStandardMinutes } =
-    props;
+  const {
+    appTimezone,
+    nowKey,
+    nowMin,
+    weekNav,
+    instrument,
+    days,
+    bookings,
+    canBook,
+    bookableUsers,
+    limitMinutes,
+    usedStandardMinutes,
+  } = props;
   const liveNow = useLiveAppNow(appTimezone, { dateKey: nowKey, minutes: nowMin });
   const scrollRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -101,6 +115,7 @@ export function CalendarClient(props: Props) {
   const [duration, setDuration] = useState(instrument.slotMinutes * 2);
   const [startMin, setStartMin] = useState<number | null>(null);
   const [notes, setNotes] = useState("");
+  const [targetUserId, setTargetUserId] = useState(() => bookableUsers[0]?.id ?? "");
   const [selection, setSelection] = useState<DragSelection | null>(null);
   const [drag, setDrag] = useState<{ dayKey: string; anchorMin: number; currentMin: number } | null>(null);
   const skipAutoStart = useRef(false);
@@ -282,6 +297,7 @@ export function CalendarClient(props: Props) {
     fd.set("durationMinutes", String(duration));
     fd.set("notes", notes);
     if (selected?.isNow) fd.set("walkUp", "1");
+    if (instrument.bookingAdminMode && targetUserId) fd.set("targetUserId", targetUserId);
 
     startTransition(async () => {
       setMessage(null);
@@ -430,9 +446,11 @@ export function CalendarClient(props: Props) {
                     const top = (b.startMin / 60) * HOUR_PX;
                     const endM = b.endKey === d.key ? b.endMin : 1440;
                     const height = Math.max(16, ((endM - b.startMin) / 60) * HOUR_PX);
-                    const tone = b.mine
-                      ? "bg-emerald-100 border-emerald-300 text-emerald-900"
-                      : "bg-slate-200 border-slate-300 text-slate-600";
+                    const tone = b.noShow
+                      ? "bg-red-100 border-red-300 text-red-900"
+                      : b.mine
+                        ? "bg-emerald-100 border-emerald-300 text-emerald-900"
+                        : "bg-slate-200 border-slate-300 text-slate-600";
                     const tooltip = [
                       `${b.startLabel} – ${b.endLabel}`,
                       props.showBookerNames && b.ownerLabel && !b.mine ? b.ownerLabel : null,
@@ -446,7 +464,10 @@ export function CalendarClient(props: Props) {
                         style={{ top, height }}
                         title={tooltip}
                       >
-                        <div className="font-semibold">{b.mine ? "Your booking" : "Booked"}</div>
+                        <div className="font-semibold">
+                          {b.mine ? "Your booking" : "Booked"}
+                          {b.noShow && " · no-show"}
+                        </div>
                         {height >= 22 && (
                           <div className="truncate opacity-90">
                             {b.startLabel} – {b.endLabel}
@@ -492,9 +513,15 @@ export function CalendarClient(props: Props) {
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Book a session</h2>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">
+          {instrument.bookingAdminMode
+            ? canBook
+              ? "Book for user"
+              : "See calendar"
+            : "Book a session"}
+        </h2>
 
-        {limitMinutes !== null && (
+        {limitMinutes !== null && canBook && !instrument.bookingAdminMode && (
           <p className="mb-3 text-xs text-slate-500">
             Standard hours used this week: <strong>{fmtDuration(usedStandardMinutes)}</strong> of{" "}
             {fmtDuration(limitMinutes)}. After-hours is unlimited.
@@ -502,10 +529,31 @@ export function CalendarClient(props: Props) {
         )}
 
         {!canBook ? (
-          <Alert tone="info">Booking is unavailable for you on this instrument right now.</Alert>
+          <Alert tone="info">
+            {instrument.bookingAdminMode
+              ? "View availability on the calendar. Contact an administrator to schedule time on this instrument."
+              : "Booking is unavailable for you on this instrument right now."}
+          </Alert>
         ) : (
           <div className="space-y-3">
             {message && <Alert tone={message.tone}>{message.text}</Alert>}
+            {instrument.bookingAdminMode && (
+              <div>
+                <Label htmlFor="b-user">User</Label>
+                <Select
+                  id="b-user"
+                  value={targetUserId}
+                  onChange={(e) => setTargetUserId(e.target.value)}
+                  required
+                >
+                  {bookableUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.username}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            )}
             <div>
               <Label htmlFor="b-date">Day</Label>
               <div className="flex items-center gap-2">
@@ -587,7 +635,7 @@ export function CalendarClient(props: Props) {
               <Alert tone="warning">This day is beyond the booking window.</Alert>
             )}
 
-            {selected?.busy ? (
+            {selected?.busy && !instrument.bookingAdminMode ? (
               <div className="space-y-2">
                 <Badge tone="amber">This slot is taken</Badge>
                 <Button
@@ -599,13 +647,20 @@ export function CalendarClient(props: Props) {
                   Join waitlist for this slot
                 </Button>
               </div>
+            ) : selected?.busy && instrument.bookingAdminMode ? (
+              <Alert tone="warning">This slot is already booked.</Alert>
             ) : (
               <Button
                 className="w-full"
-                disabled={isPending || startMin === null || !withinAdvance}
+                disabled={
+                  isPending ||
+                  startMin === null ||
+                  !withinAdvance ||
+                  (instrument.bookingAdminMode && !targetUserId)
+                }
                 onClick={() => submit("book")}
               >
-                {isPending ? "Working…" : "Book session"}
+                {isPending ? "Working…" : instrument.bookingAdminMode ? "Create booking" : "Book session"}
               </Button>
             )}
           </div>

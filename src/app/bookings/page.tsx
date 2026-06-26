@@ -4,11 +4,11 @@ import { prisma } from "@/lib/db";
 import { addMinutes, formatTz } from "@/lib/time";
 import { cancelBookingAction } from "@/actions/booking";
 import { SessionForm, type ExistingReading } from "@/components/session-form";
+import { CancelBookingButton } from "@/components/cancel-booking-button";
 import { finalLaserReadings } from "@/lib/laser-session";
 import { autoSignOutExpiredSessions, processSessionRemindersAndNoShows } from "@/lib/session-lifecycle";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 
 export const dynamic = "force-dynamic";
@@ -124,12 +124,10 @@ export default async function BookingsPage() {
                 )}
 
                 {b.endAt > now && !b.session?.signedOutAt && !canSignOut && (
-                  <form action={cancelBookingAction}>
-                    <input type="hidden" name="bookingId" value={b.id} />
-                    <Button variant="danger" size="sm">
-                      Cancel booking
-                    </Button>
-                  </form>
+                  <CancelBookingButton
+                    bookingId={b.id}
+                    label={`${b.instrument.name} · ${formatTz(b.startAt, "EEE MMM d, h:mm a")} – ${formatTz(b.scheduledEndAt, "h:mm a")}`}
+                  />
                 )}
               </CardBody>
             </Card>

@@ -87,6 +87,7 @@ export const createBookingSchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "Invalid start time."),
   durationMinutes: z.coerce.number().int().min(15).max(24 * 60),
   notes: z.string().trim().max(500).optional(),
+  targetUserId: z.string().min(1).optional(),
 });
 
 const photonField = z

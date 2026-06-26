@@ -1,5 +1,5 @@
 import { parseStandardHours } from "@/lib/booking";
-import { toggleMaintenanceAction, updateInstrumentAction } from "@/actions/admin-instrument";
+import { toggleBookingAdminModeAction, toggleMaintenanceAction, updateInstrumentAction } from "@/actions/admin-instrument";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ type Instrument = {
   location: string;
   description: string | null;
   maintenance: boolean;
+  bookingAdminMode: boolean;
   slotMinutes: number;
   maxSessionMinutes: number;
   advanceBookingDays: number;
@@ -44,6 +45,7 @@ export function InstrumentEditor({ instrument }: { instrument: Instrument }) {
             <Badge tone={instrument.maintenance ? "red" : "green"}>
               {instrument.maintenance ? "Maintenance" : "Available"}
             </Badge>
+            {instrument.bookingAdminMode && <Badge tone="blue">Booking admin mode</Badge>}
           </div>
         </CardHeader>
         <CardBody className="space-y-4">
@@ -53,6 +55,21 @@ export function InstrumentEditor({ instrument }: { instrument: Instrument }) {
             <Button variant={instrument.maintenance ? "secondary" : "danger"} size="sm">
               {instrument.maintenance ? "End maintenance" : "Put into maintenance"}
             </Button>
+          </form>
+          <form action={toggleBookingAdminModeAction}>
+            <input type="hidden" name="instrumentId" value={instrument.id} />
+            <input
+              type="hidden"
+              name="bookingAdminMode"
+              value={(!instrument.bookingAdminMode).toString()}
+            />
+            <Button variant={instrument.bookingAdminMode ? "secondary" : "outline"} size="sm">
+              {instrument.bookingAdminMode ? "Disable booking admin mode" : "Enable booking admin mode"}
+            </Button>
+            <p className="mt-2 text-xs text-slate-500">
+              When enabled, only admins can book (selecting a user). Members see the calendar but cannot self-book.
+              No-show bookings stay on the calendar instead of being auto-cancelled.
+            </p>
           </form>
         </CardBody>
       </Card>
@@ -147,7 +164,7 @@ export function InstrumentEditor({ instrument }: { instrument: Instrument }) {
               </p>
             </div>
             <div>
-              <Label>No-show auto-cancel (minutes after start)</Label>
+              <Label>No-show threshold (minutes after start)</Label>
               <Input
                 type="number"
                 name="noShowCancelMinutes"
@@ -155,7 +172,9 @@ export function InstrumentEditor({ instrument }: { instrument: Instrument }) {
                 min={1}
               />
               <p className="mt-1 text-xs text-slate-500">
-                Cancel the booking if still not signed in after this many minutes (frees the slot).
+                {instrument.bookingAdminMode
+                  ? "Tag as no-show if still not signed in after this many minutes. The booking stays on the calendar."
+                  : "Cancel the booking if still not signed in after this many minutes (frees the slot)."}
               </p>
             </div>
 

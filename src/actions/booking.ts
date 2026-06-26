@@ -38,13 +38,33 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     startTime: formData.get("startTime"),
     durationMinutes: formData.get("durationMinutes"),
     notes: formData.get("notes") || undefined,
+    targetUserId: formData.get("targetUserId") || undefined,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid booking." };
-  const { instrumentId, date, startTime, durationMinutes, notes } = parsed.data;
+  const { instrumentId, date, startTime, durationMinutes, notes, targetUserId } = parsed.data;
 
   const instrument = await prisma.instrument.findUnique({ where: { id: instrumentId } });
   if (!instrument) return { error: "Instrument not found." };
   if (instrument.maintenance) return { error: "This instrument is under maintenance and cannot be booked." };
+
+  const isAdmin = user.role === "ADMIN";
+  if (instrument.bookingAdminMode) {
+    if (!isAdmin) {
+      return { error: "Bookings on this instrument are managed by administrators." };
+    }
+    if (!targetUserId) return { error: "Select a user for this booking." };
+  } else if (targetUserId) {
+    return { error: "Invalid booking request." };
+  }
+
+  const bookForUserId = instrument.bookingAdminMode ? targetUserId! : user.id;
+  const bookForUser =
+    instrument.bookingAdminMode && targetUserId !== user.id
+      ? await prisma.user.findUnique({ where: { id: targetUserId } })
+      : user;
+  if (!bookForUser || bookForUser.status !== "ACTIVE") {
+    return { error: "Selected user is not active." };
+  }
 
   const startAt = localToUtc(date, startTime);
   const endAt = addMinutes(startAt, durationMinutes);
@@ -91,22 +111,22 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     return { error: `Bookings can be made up to ${instrument.advanceBookingDays} days in advance.` };
   }
 
-  // Training gate
+  // Training gate (admin-mode bookings skip — admin assigns users directly)
   const isTrained =
     user.role === "ADMIN" ||
     !!(await prisma.instrumentTraining.findUnique({
       where: { userId_instrumentId: { userId: user.id, instrumentId } },
     }));
-  if (!isTrained) {
+  if (!instrument.bookingAdminMode && !isTrained) {
     return { error: "You are not yet trained on this instrument. Contact a lab administrator." };
   }
 
   // Weekly split-limit check (standard hours)
   const sh = parseStandardHours(instrument.standardHours);
-  const limitOverride = await getUserInstrumentLimitOverride(user.id, instrumentId);
-  const limit = effectiveStandardLimit(user, instrument, limitOverride);
+  const limitOverride = await getUserInstrumentLimitOverride(bookForUser.id, instrumentId);
+  const limit = effectiveStandardLimit(bookForUser, instrument, limitOverride);
   if (limit !== null) {
-    const usage = await weeklyUsage(user.id, instrumentId, startAt, sh);
+    const usage = await weeklyUsage(bookForUser.id, instrumentId, startAt, sh);
     const newStandard = standardOverlapMinutes(startAt, endAt, sh);
     if (usage.standardMinutes + newStandard > limit) {
       const remaining = Math.max(0, limit - usage.standardMinutes);
@@ -119,7 +139,8 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     }
   }
 
-  const needsApproval = requiresApproval(user, instrument, isTrained, limitOverride);
+  const needsApproval =
+    !instrument.bookingAdminMode && requiresApproval(bookForUser, instrument, isTrained, limitOverride);
   const status = needsApproval ? "PENDING" : "CONFIRMED";
 
   // Conflict check + create. The DB exclusion constraint is the source of truth;
@@ -139,7 +160,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   if (instrument.minGapBetweenUserBookingsMinutes > 0) {
     const myBookings = await prisma.booking.findMany({
       where: {
-        userId: user.id,
+        userId: bookForUser.id,
         instrumentId,
         status: { in: ["CONFIRMED", "PENDING"] },
       },
@@ -155,7 +176,15 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   let booking;
   try {
     booking = await prisma.booking.create({
-      data: { instrumentId, userId: user.id, startAt, endAt, scheduledEndAt: endAt, notes, status },
+      data: {
+        instrumentId,
+        userId: bookForUser.id,
+        startAt,
+        endAt,
+        scheduledEndAt: endAt,
+        notes,
+        status,
+      },
     });
   } catch (err) {
     if (
@@ -167,11 +196,14 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     throw err;
   }
 
-  await audit(user.id, "booking.create", { type: "booking", id: booking.id }, { status });
+  await audit(user.id, "booking.create", { type: "booking", id: booking.id }, {
+    status,
+    ...(instrument.bookingAdminMode ? { bookedForUserId: bookForUser.id } : {}),
+  });
 
-  if (needsApproval && user.notifyConfirmations) {
+  if (needsApproval && bookForUser.notifyConfirmations) {
     await sendEmail({
-      to: user.email,
+      to: bookForUser.email,
       subject: "Booking submitted (awaiting approval)",
       heading: "Booking awaiting approval",
       body: `<p><strong>${instrument.name}</strong></p><p>${formatTz(startAt, "EEE MMM d, yyyy")} · ${formatTz(startAt, "h:mm a")} – ${formatTz(endAt, "h:mm a")}</p><p>An administrator will review your request.</p>`,
@@ -183,9 +215,11 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   revalidatePath("/bookings");
   revalidatePath("/");
   return {
-    success: needsApproval
-      ? "Booking submitted. An administrator will review it shortly."
-      : "Booking confirmed.",
+    success: instrument.bookingAdminMode
+      ? "Booking created for the selected user."
+      : needsApproval
+        ? "Booking submitted. An administrator will review it shortly."
+        : "Booking confirmed.",
   };
 }
 

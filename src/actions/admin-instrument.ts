@@ -86,6 +86,17 @@ export async function toggleMaintenanceAction(formData: FormData): Promise<void>
   revalidatePath("/calendar");
 }
 
+export async function toggleBookingAdminModeAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const id = String(formData.get("instrumentId"));
+  const bookingAdminMode = String(formData.get("bookingAdminMode")) === "true";
+  await prisma.instrument.update({ where: { id }, data: { bookingAdminMode } });
+  await audit(admin.id, "instrument.booking_admin_mode", { type: "instrument", id }, { bookingAdminMode });
+  revalidatePath("/admin/instruments");
+  revalidatePath("/");
+  revalidatePath("/calendar");
+}
+
 export async function approveBookingAction(
   _prev: { error?: string } | undefined,
   formData: FormData,

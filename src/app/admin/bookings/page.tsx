@@ -5,7 +5,7 @@ import { formatTz } from "@/lib/time";
 import { rejectBookingAction } from "@/actions/admin-instrument";
 import { ApproveBookingButton } from "@/components/admin/approve-booking-button";
 import { DeleteBookingButton } from "@/components/admin/delete-booking-button";
-import { cancelBookingAction } from "@/actions/booking";
+import { CancelBookingButton } from "@/components/cancel-booking-button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,12 +109,12 @@ export default async function AdminBookingsPage() {
                     {(b.status === "CONFIRMED" || b.status === "PENDING") &&
                       b.endAt > now &&
                       !b.session?.signedOutAt && (
-                      <form action={cancelBookingAction}>
-                        <input type="hidden" name="bookingId" value={b.id} />
-                        <Button size="sm" variant="ghost">
-                          Cancel
-                        </Button>
-                      </form>
+                      <CancelBookingButton
+                        bookingId={b.id}
+                        variant="ghost"
+                        buttonLabel="Cancel"
+                        label={`${b.user.username} · ${b.instrument.name} · ${formatTz(b.startAt, "MMM d, h:mm a")} – ${formatTz(b.endAt, "h:mm a")}`}
+                      />
                     )}
                   </td>
                   {owner && (

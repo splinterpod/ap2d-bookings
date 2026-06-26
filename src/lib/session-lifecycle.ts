@@ -61,7 +61,13 @@ export async function processSessionRemindersAndNoShows(now = new Date()): Promi
   let noShowCancellations = 0;
 
   const instruments = await prisma.instrument.findMany({
-    select: { id: true, name: true, lateSignInReminderMinutes: true, noShowCancelMinutes: true },
+    select: {
+      id: true,
+      name: true,
+      lateSignInReminderMinutes: true,
+      noShowCancelMinutes: true,
+      bookingAdminMode: true,
+    },
   });
 
   for (const inst of instruments) {
@@ -96,20 +102,30 @@ export async function processSessionRemindersAndNoShows(now = new Date()): Promi
       lateSignInReminders++;
     }
 
-    // No-show auto-cancel: past start + noShowCancelMinutes, no session.
+    // No-show: auto-cancel in normal mode; tag only in booking admin mode (booking stays on calendar).
     const noShowThreshold = addMinutes(now, -inst.noShowCancelMinutes);
     const noShows = await prisma.booking.findMany({
       where: {
         instrumentId: inst.id,
         status: "CONFIRMED",
+        noShow: false,
         startAt: { lte: noShowThreshold },
         endAt: { gt: now },
         session: { is: null },
       },
-      include: { user: true, instrument: { select: { name: true, slug: true } } },
+      include: { user: true, instrument: { select: { name: true, slug: true, bookingAdminMode: true } } },
     });
 
     for (const b of noShows) {
+      if (inst.bookingAdminMode) {
+        await prisma.booking.update({
+          where: { id: b.id },
+          data: { noShow: true },
+        });
+        noShowCancellations++;
+        continue;
+      }
+
       await prisma.booking.update({
         where: { id: b.id },
         data: { status: "CANCELLED", noShow: true },

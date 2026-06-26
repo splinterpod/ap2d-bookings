@@ -42,6 +42,7 @@ export default async function AdminInstrumentsPage({
               >
                 {i.name}
                 {i.maintenance && <Badge tone="red">Maint.</Badge>}
+                {i.bookingAdminMode && <Badge tone="blue">Admin mode</Badge>}
               </Link>
             );
           })}
