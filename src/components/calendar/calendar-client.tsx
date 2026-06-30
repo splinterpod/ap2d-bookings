@@ -465,11 +465,14 @@ export function CalendarClient(props: Props) {
                   />
                 )}
                 {bookings
-                  .filter((b) => b.startKey === d.key)
+                  .filter((b) => b.startKey <= d.key && b.endKey >= d.key)
                   .map((b) => {
-                    const top = (b.startMin / 60) * HOUR_PX;
-                    const endM = b.endKey === d.key ? b.endMin : 1440;
-                    const height = Math.max(16, ((endM - b.startMin) / 60) * HOUR_PX);
+                    const isStartDay = b.startKey === d.key;
+                    const isEndDay = b.endKey === d.key;
+                    const segStart = isStartDay ? b.startMin : 0;
+                    const segEnd = isEndDay ? b.endMin : 1440;
+                    const top = (segStart / 60) * HOUR_PX;
+                    const height = Math.max(16, ((segEnd - segStart) / 60) * HOUR_PX);
                     const tone = b.noShow
                       ? "bg-red-100 border-red-300 text-red-900"
                       : b.mine
@@ -481,24 +484,34 @@ export function CalendarClient(props: Props) {
                     ]
                       .filter(Boolean)
                       .join(" · ");
+                    const timeLabel = isStartDay
+                      ? b.rangeLabel
+                      : isEndDay
+                        ? `Until ${b.endLabel}`
+                        : b.rangeLabel;
                     return (
                       <div
-                        key={b.id}
-                        className={`pointer-events-none absolute left-0.5 right-0.5 z-20 overflow-hidden rounded-md border px-1 py-0.5 text-[10px] leading-tight ${tone}`}
+                        key={`${b.id}-${d.key}`}
+                        className={`pointer-events-none absolute left-0.5 right-0.5 z-20 overflow-hidden rounded-md border px-1 py-0.5 text-[10px] leading-snug ${tone}`}
                         style={{ top, height }}
                         title={tooltip}
                       >
-                        <div className="font-semibold">
-                          {b.mine ? "Your booking" : "Booked"}
-                          {b.noShow && " · no-show"}
-                        </div>
-                        {height >= 22 && (
-                          <div className="truncate opacity-90">
-                            {b.rangeLabel}
+                        {isStartDay && (
+                          <div className="font-semibold">
+                            {b.mine ? "Your booking" : "Booked"}
+                            {b.noShow && " · no-show"}
                           </div>
                         )}
-                        {props.showBookerNames && b.ownerLabel && !b.mine && <div>{b.ownerLabel}</div>}
-                        {b.status === "PENDING" && <div className="italic">pending</div>}
+                        {!isStartDay && (
+                          <div className="font-semibold opacity-90">↳ continued</div>
+                        )}
+                        {height >= 14 && (
+                          <div className="whitespace-normal break-words opacity-90">{timeLabel}</div>
+                        )}
+                        {isStartDay && props.showBookerNames && b.ownerLabel && !b.mine && (
+                          <div className="whitespace-normal break-words">{b.ownerLabel}</div>
+                        )}
+                        {isStartDay && b.status === "PENDING" && <div className="italic">pending</div>}
                       </div>
                     );
                   })}
