@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "./db";
 import { sendEmail } from "./email";
 import { APP_URL } from "./env";
-import { formatTz, addMinutes } from "./time";
+import { formatTz, addMinutes, formatBookingRange } from "./time";
 import { notifyNextOnWaitlist } from "@/actions/waitlist";
 
 export type AutoSignOutResult = {
@@ -127,7 +127,7 @@ export async function processSessionRemindersAndNoShows(now = new Date()): Promi
           to: b.user.email,
           subject: `Booking cancelled — no sign-in — ${b.instrument.name}`,
           heading: "Booking cancelled (no sign-in)",
-          body: `<p>Your booking on <strong>${b.instrument.name}</strong> (${formatTz(b.startAt, "EEE MMM d, h:mm a")} – ${formatTz(b.endAt, "h:mm a")}) was automatically cancelled because you did not sign in within ${inst.noShowCancelMinutes} minutes of the start time.</p>`,
+          body: `<p>Your booking on <strong>${b.instrument.name}</strong> (${formatBookingRange(b.startAt, b.endAt, "EEE MMM d, h:mm a")}) was automatically cancelled because you did not sign in within ${inst.noShowCancelMinutes} minutes of the start time.</p>`,
           cta: { label: "Book again", href: `${APP_URL}/calendar?instrument=${b.instrument.slug}` },
         });
         noShowCancellations++;

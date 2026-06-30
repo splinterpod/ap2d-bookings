@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { describeLaserSession } from "./laser-session";
-import { formatTz } from "./time";
+import { formatTz, formatBookingEnd } from "./time";
 
 export type StatusTone = "green" | "amber" | "red" | "blue";
 
@@ -66,7 +66,7 @@ export async function getInstrumentStatus(
     return {
       tone: "blue",
       label: "Reserved",
-      detail: `Reserved until ${formatTz(current.endAt, "h:mm a")}${who} — not signed in yet.`,
+      detail: `Reserved until ${formatBookingEnd(current.startAt, current.endAt)}${who} — not signed in yet.`,
     };
   }
 

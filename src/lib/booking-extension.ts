@@ -1,7 +1,7 @@
 import "server-only";
 import type { Booking, Instrument, InstrumentSession } from "@prisma/client";
 import { prisma } from "./db";
-import { addMinutes, clockTime, formatTz, localToUtc, parseClock } from "./time";
+import { addMinutes, clockTime, formatBookingEnd, localToUtc, parseClock } from "./time";
 import {
   BOOKING_GRID_MINUTES,
   buildStartSlotOptions,
@@ -97,7 +97,7 @@ export function buildDurationOptionsFromStart(
   while (cursor <= maxEndAt) {
     opts.push({
       minutes: Math.round((cursor.getTime() - startAt.getTime()) / 60000),
-      endLabel: formatTz(cursor, "h:mm a"),
+      endLabel: formatBookingEnd(startAt, cursor),
     });
     cursor = addMinutes(cursor, slotMinutes);
   }
@@ -105,6 +105,7 @@ export function buildDurationOptionsFromStart(
 }
 
 export function buildExtensionOptions(
+  bookingStartAt: Date,
   currentEndAt: Date,
   maxEndAt: Date,
   slotMinutes: number,
@@ -120,7 +121,7 @@ export function buildExtensionOptions(
     const extraMinutes = Math.round((cursor.getTime() - currentEndAt.getTime()) / 60000);
     opts.push({
       newEndAtIso: cursor.toISOString(),
-      label: `${formatTz(cursor, "h:mm a")} (+${fmtShort(extraMinutes)})`,
+      label: `${formatBookingEnd(bookingStartAt, cursor)} (+${fmtShort(extraMinutes)})`,
       extraMinutes,
     });
     cursor = addMinutes(cursor, slotMinutes);
@@ -165,7 +166,7 @@ export async function resolveBookingExtension(
   const base: ExtensionInfo = {
     canExtend: false,
     options: [],
-    currentEndLabel: formatTz(booking.endAt, "h:mm a"),
+    currentEndLabel: formatBookingEnd(booking.startAt, booking.endAt),
     bookingId: booking.id,
   };
 
@@ -204,7 +205,7 @@ export async function resolveBookingExtension(
     instrument,
     booking.id,
   );
-  const options = buildExtensionOptions(booking.endAt, maxEnd, instrument.slotMinutes);
+  const options = buildExtensionOptions(booking.startAt, booking.endAt, maxEnd, instrument.slotMinutes);
   if (options.length === 0) {
     return { ...base, reason: "No free time to extend into — the next booking is too close." };
   }

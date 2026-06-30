@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { addMinutes, formatTz } from "@/lib/time";
+import { addMinutes, formatBookingEnd } from "@/lib/time";
 import {
   deriveLaserFlags,
   readLaserSessionReadings,
@@ -68,7 +68,7 @@ export async function signInSessionAction(_prev: FormState, formData: FormData):
   });
   if (blockingSession) {
     return {
-      error: `The instrument is still in use until ${formatTz(blockingSession.booking.endAt, "h:mm a")}. Sign in when the previous session ends.`,
+      error: `The instrument is still in use until ${formatBookingEnd(blockingSession.booking.startAt, blockingSession.booking.endAt)}. Sign in when the previous session ends.`,
     };
   }
 

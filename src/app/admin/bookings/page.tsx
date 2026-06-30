@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { isAccountOwner } from "@/lib/account-owner";
-import { formatTz } from "@/lib/time";
+import { formatTz, formatBookingRange } from "@/lib/time";
 import { rejectBookingAction } from "@/actions/admin-instrument";
 import { ApproveBookingButton } from "@/components/admin/approve-booking-button";
 import { DeleteBookingButton } from "@/components/admin/delete-booking-button";
@@ -42,7 +42,7 @@ export default async function AdminBookingsPage() {
                 <div>
                   <span className="font-medium text-slate-800">{b.user.username}</span> · {b.instrument.name}
                   <div className="text-slate-500">
-                    {formatTz(b.startAt, "EEE MMM d, h:mm a")} – {formatTz(b.endAt, "h:mm a")}
+                    {formatBookingRange(b.startAt, b.endAt, "EEE MMM d, h:mm a")}
                   </div>
                   {b.notes && <div className="text-slate-400">Notes: {b.notes}</div>}
                 </div>
@@ -82,7 +82,7 @@ export default async function AdminBookingsPage() {
                 <tr key={b.id}>
                   <td className="py-2 pr-3 font-medium text-slate-800">{b.user.username}</td>
                   <td className="py-2 pr-3 text-slate-600">
-                    {formatTz(b.startAt, "MMM d, h:mm a")} – {formatTz(b.endAt, "h:mm a")}
+                    {formatBookingRange(b.startAt, b.endAt)}
                   </td>
                   <td className="py-2 pr-3">
                     <Badge
@@ -113,7 +113,7 @@ export default async function AdminBookingsPage() {
                         bookingId={b.id}
                         variant="ghost"
                         buttonLabel="Cancel"
-                        label={`${b.user.username} · ${b.instrument.name} · ${formatTz(b.startAt, "MMM d, h:mm a")} – ${formatTz(b.endAt, "h:mm a")}`}
+                        label={`${b.user.username} · ${b.instrument.name} · ${formatBookingRange(b.startAt, b.endAt)}`}
                       />
                     )}
                   </td>

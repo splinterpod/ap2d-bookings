@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
 import { APP_URL } from "@/lib/env";
-import { formatTz, localToUtc, addMinutes } from "@/lib/time";
+import { formatTz, localToUtc, addMinutes, formatBookingRange } from "@/lib/time";
 
 const HOLD_MINUTES = 30;
 
@@ -78,7 +78,7 @@ export async function notifyNextOnWaitlist(instrumentId: string, startAt: Date, 
     to: next.user.email,
     subject: `A ${next.instrument.name} slot you wanted just opened`,
     heading: "Slot available",
-    body: `<p>A slot you joined the waitlist for is now open:</p><p><strong>${next.instrument.name}</strong><br/>${formatTz(startAt, "EEE MMM d, yyyy")} · ${formatTz(startAt, "h:mm a")} – ${formatTz(endAt, "h:mm a")}</p><p>It is first-come, first-served — book it before someone else does.</p>`,
+    body: `<p>A slot you joined the waitlist for is now open:</p><p><strong>${next.instrument.name}</strong><br/>${formatBookingRange(startAt, endAt, "EEE MMM d, h:mm a")}</p><p>It is first-come, first-served — book it before someone else does.</p>`,
     cta: { label: "Book now", href: `${APP_URL}/calendar?instrument=${next.instrument.slug}` },
   });
 }

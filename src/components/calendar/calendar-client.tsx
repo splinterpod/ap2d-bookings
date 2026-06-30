@@ -48,6 +48,7 @@ export type SerBooking = {
   endMin: number;
   startLabel: string;
   endLabel: string;
+  rangeLabel: string;
 };
 
 type Day = { key: string; label: string; dayNum: string };
@@ -475,7 +476,7 @@ export function CalendarClient(props: Props) {
                         ? "bg-emerald-100 border-emerald-300 text-emerald-900"
                         : "bg-slate-200 border-slate-300 text-slate-600";
                     const tooltip = [
-                      `${b.startLabel} – ${b.endLabel}`,
+                      b.rangeLabel,
                       props.showBookerNames && b.ownerLabel && !b.mine ? b.ownerLabel : null,
                     ]
                       .filter(Boolean)
@@ -493,7 +494,7 @@ export function CalendarClient(props: Props) {
                         </div>
                         {height >= 22 && (
                           <div className="truncate opacity-90">
-                            {b.startLabel} – {b.endLabel}
+                            {b.rangeLabel}
                           </div>
                         )}
                         {props.showBookerNames && b.ownerLabel && !b.mine && <div>{b.ownerLabel}</div>}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { formatTz } from "@/lib/time";
+import { formatBookingRange } from "@/lib/time";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -66,7 +66,7 @@ export default async function AdminOverviewPage() {
                   <span className="font-medium text-slate-800">{b.user.username}</span>{" "}
                   <span className="text-slate-500">· {b.instrument.name}</span>
                   <div className="text-slate-500">
-                    {formatTz(b.startAt, "MMM d, h:mm a")} – {formatTz(b.endAt, "h:mm a")}
+                    {formatBookingRange(b.startAt, b.endAt)}
                   </div>
                 </div>
                 <Badge

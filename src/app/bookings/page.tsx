@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { addMinutes, formatTz } from "@/lib/time";
+import { addMinutes, formatTz, formatBookingEnd, formatBookingRange } from "@/lib/time";
 import { cancelBookingAction } from "@/actions/booking";
 import { SessionForm, type ExistingReading } from "@/components/session-form";
 import { CancelBookingButton } from "@/components/cancel-booking-button";
@@ -102,8 +102,8 @@ export default async function BookingsPage() {
                   <div>
                     {formatTz(b.startAt, "h:mm a")} –{" "}
                     {releasedEarly
-                      ? `${formatTz(b.endAt, "h:mm a")} (released; booked until ${formatTz(b.scheduledEndAt, "h:mm a")})`
-                      : formatTz(b.scheduledEndAt, "h:mm a")}
+                      ? `${formatTz(b.endAt, "h:mm a")} (released; booked until ${formatBookingEnd(b.startAt, b.scheduledEndAt)})`
+                      : formatBookingEnd(b.startAt, b.scheduledEndAt)}
                   </div>
                   {b.notes && <p className="mt-1 text-slate-500">Notes: {b.notes}</p>}
                 </div>
@@ -152,7 +152,7 @@ export default async function BookingsPage() {
                 {b.endAt > now && !b.session?.signedOutAt && !canSignOut && (
                   <CancelBookingButton
                     bookingId={b.id}
-                    label={`${b.instrument.name} · ${formatTz(b.startAt, "EEE MMM d, h:mm a")} – ${formatTz(b.scheduledEndAt, "h:mm a")}`}
+                    label={`${b.instrument.name} · ${formatBookingRange(b.startAt, b.scheduledEndAt, "EEE MMM d, h:mm a")}`}
                   />
                 )}
               </CardBody>
@@ -174,8 +174,8 @@ export default async function BookingsPage() {
               <div className="text-slate-500">
                 {formatTz(b.startAt, "MMM d, yyyy · h:mm a")} –{" "}
                 {b.scheduledEndAt > b.endAt
-                  ? `${formatTz(b.endAt, "h:mm a")} (booked until ${formatTz(b.scheduledEndAt, "h:mm a")})`
-                  : formatTz(b.scheduledEndAt, "h:mm a")}
+                  ? `${formatTz(b.endAt, "h:mm a")} (booked until ${formatBookingEnd(b.startAt, b.scheduledEndAt)})`
+                  : formatBookingEnd(b.startAt, b.scheduledEndAt)}
               </div>
             </div>
             <div className="flex items-center gap-2">

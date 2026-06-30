@@ -6,6 +6,7 @@ import {
   clockTime,
   dateKey,
   formatTz,
+  formatCalendarBookingLabels,
   localToUtc,
   parseClock,
   startOfWeekUtc,
@@ -103,23 +104,27 @@ export default async function CalendarPage({
     orderBy: { startAt: "asc" },
   });
 
-  const serBookings: SerBooking[] = bookings.map((b) => ({
-    id: b.id,
-    mine: b.userId === user.id,
-    status: b.status,
-    noShow: b.noShow,
-    ownerLabel: showBookerNames
-      ? b.userId === user.id
-        ? "You"
-        : b.user.username
-      : undefined,
-    startKey: dateKey(b.startAt),
-    startMin: parseClock(clockTime(b.startAt)),
-    endKey: dateKey(b.endAt),
-    endMin: parseClock(clockTime(b.endAt)),
-    startLabel: formatTz(b.startAt, "h:mm a"),
-    endLabel: formatTz(b.endAt, "h:mm a"),
-  }));
+  const serBookings: SerBooking[] = bookings.map((b) => {
+    const labels = formatCalendarBookingLabels(b.startAt, b.endAt);
+    return {
+      id: b.id,
+      mine: b.userId === user.id,
+      status: b.status,
+      noShow: b.noShow,
+      ownerLabel: showBookerNames
+        ? b.userId === user.id
+          ? "You"
+          : b.user.username
+        : undefined,
+      startKey: dateKey(b.startAt),
+      startMin: parseClock(clockTime(b.startAt)),
+      endKey: dateKey(b.endAt),
+      endMin: parseClock(clockTime(b.endAt)),
+      startLabel: labels.startLabel,
+      endLabel: labels.endLabel,
+      rangeLabel: labels.rangeLabel,
+    };
+  });
 
   const myWaitlist = await prisma.waitlistEntry.findMany({
     where: {

@@ -74,3 +74,32 @@ export function nowLocal(): { dateKey: string; minutes: number; clock: string } 
   const d = new Date();
   return { dateKey: dateKey(d), minutes: parseClock(clockTime(d)), clock: clockTime(d) };
 }
+
+/** End time for a booking range; includes date when on a different day than `startAt`. */
+export function formatBookingEnd(startAt: Date, endAt: Date): string {
+  return dateKey(startAt) === dateKey(endAt)
+    ? formatTz(endAt, "h:mm a")
+    : formatTz(endAt, "MMM d, h:mm a");
+}
+
+/** e.g. "Jun 30, 3:00 PM – 11:00 PM" or "Jun 30, 3:00 PM – Jul 1, 3:00 PM". */
+export function formatBookingRange(
+  startAt: Date,
+  endAt: Date,
+  startFmt: string = "MMM d, h:mm a",
+): string {
+  const endFmt = dateKey(startAt) === dateKey(endAt) ? "h:mm a" : startFmt;
+  return `${formatTz(startAt, startFmt)} – ${formatTz(endAt, endFmt)}`;
+}
+
+/** Calendar block labels and full range for tooltips. */
+export function formatCalendarBookingLabels(
+  startAt: Date,
+  endAt: Date,
+): { startLabel: string; endLabel: string; rangeLabel: string } {
+  return {
+    startLabel: formatTz(startAt, "h:mm a"),
+    endLabel: formatBookingEnd(startAt, endAt),
+    rangeLabel: formatBookingRange(startAt, endAt, "MMM d, h:mm a"),
+  };
+}

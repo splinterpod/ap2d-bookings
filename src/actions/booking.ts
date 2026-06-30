@@ -15,7 +15,7 @@ import {
   resolveBookingExtension,
   validateBookingExtension,
 } from "@/lib/booking-extension";
-import { addMinutes, formatTz, localToUtc, clockTime, parseClock } from "@/lib/time";
+import { addMinutes, formatTz, formatBookingEnd, formatBookingRange, localToUtc, clockTime, parseClock } from "@/lib/time";
 import {
   BOOKING_GRID_MINUTES,
   isOnBookingGrid,
@@ -239,7 +239,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
       to: bookForUser.email,
       subject: "Booking submitted (awaiting approval)",
       heading: "Booking awaiting approval",
-      body: `<p><strong>${instrument.name}</strong></p><p>${formatTz(startAt, "EEE MMM d, yyyy")} · ${formatTz(startAt, "h:mm a")} – ${formatTz(endAt, "h:mm a")}</p><p>An administrator will review your request.</p>`,
+      body: `<p><strong>${instrument.name}</strong></p><p>${formatBookingRange(startAt, endAt, "EEE MMM d, h:mm a")}</p><p>An administrator will review your request.</p>`,
       cta: { label: "View my bookings", href: `${APP_URL}/bookings` },
     });
   }
@@ -313,7 +313,7 @@ export async function extendBookingAction(_prev: FormState, formData: FormData):
   revalidatePath("/bookings");
   revalidatePath("/admin/bookings");
   revalidatePath("/");
-  return { success: `Booking extended until ${formatTz(newEndAt, "h:mm a")}.` };
+  return { success: `Booking extended until ${formatBookingEnd(booking.startAt, newEndAt)}.` };
 }
 
 export async function cancelBookingAction(formData: FormData): Promise<void> {
