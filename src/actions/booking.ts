@@ -9,12 +9,12 @@ import { sendEmail } from "@/lib/email";
 import { APP_URL } from "@/lib/env";
 import { createBookingSchema, extendBookingSchema } from "@/lib/validation";
 import {
-  findOngoingBooking,
-  instrumentInUse,
-  maxFreeEndAt,
   resolveBookingExtension,
+  resolveExtensionRequest,
   validateBookingExtension,
+  validateExtensionRequest,
 } from "@/lib/booking-extension";
+import { notifyAdminsOfBookingRequest, notifyAdminsOfRequestCancelled } from "@/lib/admin-notify";
 import { addMinutes, formatTz, formatBookingEnd, formatBookingRange, localToUtc, clockTime, parseClock } from "@/lib/time";
 import {
   BOOKING_GRID_MINUTES,
@@ -62,6 +62,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     }));
 
   const walkUp = formData.get("walkUp") === "1";
+  const memberRequest = instrument.bookingAdminMode && !isAdmin;
   let bookForUserId = user.id;
   let bookForUser = user;
 
@@ -78,8 +79,8 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
         bookForUser = u;
       }
     } else {
-      if (!walkUp) {
-        return { error: "Only walk-up bookings from now are available on this instrument." };
+      if (walkUp) {
+        return { error: "Submit a time request using the calendar form." };
       }
       if (!isTrained) {
         return { error: "You are not yet trained on this instrument. Contact a lab administrator." };
@@ -106,23 +107,10 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     return { error: `Start time must be on a ${BOOKING_GRID_MINUTES}-minute interval (e.g. 9:00, 9:15, 9:45).` };
   }
 
-  if (walkUp) {
+  if (walkUp && !memberRequest) {
     const currentBlock = nowBlockStart(parseClock(clockTime(now)), BOOKING_GRID_MINUTES);
     if (startMinutes < currentBlock) {
       return { error: "That walk-up slot has passed. Refresh the page." };
-    }
-    if (instrument.bookingAdminMode && !isAdmin) {
-      const ongoing = await findOngoingBooking(bookForUserId, instrumentId, now);
-      if (ongoing) {
-        return { error: "You have an ongoing booking. Extend it instead." };
-      }
-      if (await instrumentInUse(instrumentId)) {
-        return { error: "The instrument is in use right now." };
-      }
-      const maxEnd = await maxFreeEndAt(instrumentId, startAt, startAt, instrument);
-      if (endAt > maxEnd) {
-        return { error: "That duration extends into the next booking." };
-      }
     }
   } else if (startAt < now) {
     return { error: "Start time is in the past. Refresh the page for current slots." };
@@ -139,8 +127,8 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     };
   }
 
-  if (instrument.bookingAdminMode && walkUp && !isAdmin) {
-    // No max session cap for member walk-up in admin mode.
+  if (memberRequest) {
+    // No max session cap on member time requests.
   } else if (durationMinutes > instrument.maxSessionMinutes) {
     return { error: `Maximum session length is ${formatHours(instrument.maxSessionMinutes)}.` };
   }
@@ -172,16 +160,16 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     }
   }
 
-  const needsApproval =
-    !instrument.bookingAdminMode && requiresApproval(bookForUser, instrument, isTrained, limitOverride);
+  const needsApproval = memberRequest
+    ? true
+    : !instrument.bookingAdminMode && requiresApproval(bookForUser, instrument, isTrained, limitOverride);
   const status = needsApproval ? "PENDING" : "CONFIRMED";
 
-  // Conflict check + create. The DB exclusion constraint is the source of truth;
-  // we also pre-check to return a friendly message in the common case.
+  const overlapStatuses: ("CONFIRMED" | "PENDING")[] = memberRequest ? ["CONFIRMED"] : ["CONFIRMED", "PENDING"];
   const overlap = await prisma.booking.findFirst({
     where: {
       instrumentId,
-      status: { in: ["CONFIRMED", "PENDING"] },
+      status: { in: overlapStatuses },
       startAt: { lt: endAt },
       endAt: { gt: startAt },
     },
@@ -234,7 +222,15 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     ...(instrument.bookingAdminMode ? { bookedForUserId: bookForUser.id } : {}),
   });
 
-  if (needsApproval && bookForUser.notifyConfirmations) {
+  if (needsApproval && memberRequest) {
+    await notifyAdminsOfBookingRequest({
+      kind: "new",
+      user: bookForUser,
+      instrument,
+      startAt,
+      endAt,
+    });
+  } else if (needsApproval && bookForUser.notifyConfirmations) {
     await sendEmail({
       to: bookForUser.email,
       subject: "Booking submitted (awaiting approval)",
@@ -246,10 +242,11 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
 
   revalidatePath("/calendar");
   revalidatePath("/bookings");
+  revalidatePath("/admin/bookings");
   revalidatePath("/");
   return {
-    success: instrument.bookingAdminMode && !isAdmin
-      ? "Booking confirmed."
+    success: memberRequest
+      ? "Request submitted. An administrator will review it."
       : instrument.bookingAdminMode
         ? "Booking created for the selected user."
         : needsApproval
@@ -282,6 +279,48 @@ export async function extendBookingAction(_prev: FormState, formData: FormData):
   const isAdmin = user.role === "ADMIN";
   if (booking.userId !== user.id && !isAdmin) {
     return { error: "You can only extend your own bookings." };
+  }
+
+  if (!isAdmin) {
+    const info = await resolveExtensionRequest(booking, booking.instrument, new Date());
+    if (!info.canExtend) {
+      return { error: info.reason ?? "You cannot request an extension right now." };
+    }
+    if (!info.options.some((o) => new Date(o.newEndAtIso).getTime() === newEndAt.getTime())) {
+      return { error: "Choose a valid extension from the list." };
+    }
+
+    const validation = await validateExtensionRequest(
+      booking,
+      booking.instrument,
+      newEndAt,
+    );
+    if (!validation.ok) return { error: validation.error };
+
+    await prisma.booking.update({
+      where: { id: bookingId },
+      data: { requestedEndAt: newEndAt },
+    });
+    await audit(user.id, "booking.extend_request", { type: "booking", id: bookingId }, {
+      requestedEndAt: newEndAt.toISOString(),
+    });
+
+    await notifyAdminsOfBookingRequest({
+      kind: "extension",
+      user,
+      instrument: booking.instrument,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      requestedEndAt: newEndAt,
+    });
+
+    revalidatePath("/calendar");
+    revalidatePath("/bookings");
+    revalidatePath("/admin/bookings");
+    revalidatePath("/");
+    return {
+      success: `Extension request submitted (until ${formatBookingEnd(booking.startAt, newEndAt)}). An administrator will review it.`,
+    };
   }
 
   const info = await resolveBookingExtension(booking, booking.instrument, user.id, isAdmin);
@@ -335,11 +374,56 @@ export async function cancelBookingAction(formData: FormData): Promise<void> {
   if (booking.endAt <= now) return;
   if (booking.session && !booking.session.signedOutAt) return;
 
+  const wasPending = booking.status === "PENDING";
+
   await prisma.booking.update({ where: { id: bookingId }, data: { status: "CANCELLED" } });
   await audit(user.id, "booking.cancel", { type: "booking", id: bookingId }, { byAdmin: isAdmin && !isOwner });
 
-  // Offer the freed slot to the first person on the waitlist.
-  await notifyNextOnWaitlist(booking.instrumentId, booking.startAt, booking.endAt);
+  if (wasPending && booking.instrument.bookingAdminMode && isOwner && !isAdmin) {
+    await notifyAdminsOfRequestCancelled({
+      kind: "booking",
+      user: booking.user,
+      instrument: booking.instrument,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      requestedEndAt: booking.requestedEndAt ?? undefined,
+    });
+  } else if (!wasPending) {
+    // Offer the freed slot to the first person on the waitlist.
+    await notifyNextOnWaitlist(booking.instrumentId, booking.startAt, booking.endAt);
+  }
+
+  revalidatePath("/calendar");
+  revalidatePath("/bookings");
+  revalidatePath("/admin/bookings");
+  revalidatePath("/");
+}
+
+export async function cancelExtensionRequestAction(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const bookingId = String(formData.get("bookingId"));
+
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { instrument: true, user: true },
+  });
+  if (!booking || booking.userId !== user.id || !booking.requestedEndAt) return;
+  if (booking.status !== "CONFIRMED") return;
+
+  const requestedEndAt = booking.requestedEndAt;
+  await prisma.booking.update({ where: { id: bookingId }, data: { requestedEndAt: null } });
+  await audit(user.id, "booking.extend_request_cancel", { type: "booking", id: bookingId }, {
+    requestedEndAt: requestedEndAt.toISOString(),
+  });
+
+  await notifyAdminsOfRequestCancelled({
+    kind: "extension",
+    user: booking.user,
+    instrument: booking.instrument,
+    startAt: booking.startAt,
+    endAt: booking.endAt,
+    requestedEndAt,
+  });
 
   revalidatePath("/calendar");
   revalidatePath("/bookings");

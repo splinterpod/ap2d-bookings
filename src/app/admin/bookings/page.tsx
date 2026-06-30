@@ -1,9 +1,10 @@
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { isAccountOwner } from "@/lib/account-owner";
-import { formatTz, formatBookingRange } from "@/lib/time";
-import { rejectBookingAction } from "@/actions/admin-instrument";
+import { formatTz, formatBookingRange, formatBookingEnd } from "@/lib/time";
+import { rejectBookingAction, rejectExtensionRequestAction } from "@/actions/admin-instrument";
 import { ApproveBookingButton } from "@/components/admin/approve-booking-button";
+import { ApproveExtensionButton } from "@/components/admin/approve-extension-button";
 import { DeleteBookingButton } from "@/components/admin/delete-booking-button";
 import { CancelBookingButton } from "@/components/cancel-booking-button";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,12 @@ export default async function AdminBookingsPage() {
     orderBy: { startAt: "asc" },
   });
 
+  const extensionRequests = await prisma.booking.findMany({
+    where: { status: "CONFIRMED", requestedEndAt: { not: null } },
+    include: { instrument: true, user: { select: { username: true, email: true } } },
+    orderBy: { requestedEndAt: "asc" },
+  });
+
   const recent = await prisma.booking.findMany({
     include: { instrument: true, user: { select: { username: true } }, session: true },
     orderBy: { startAt: "desc" },
@@ -31,6 +38,36 @@ export default async function AdminBookingsPage() {
 
   return (
     <div className="space-y-6">
+      {extensionRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Extension requests ({extensionRequests.length})</CardTitle>
+          </CardHeader>
+          <CardBody className="divide-y divide-slate-100">
+            {extensionRequests.map((b) => (
+              <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                <div>
+                  <span className="font-medium text-slate-800">{b.user.username}</span> · {b.instrument.name}
+                  <div className="text-slate-500">
+                    {formatBookingRange(b.startAt, b.endAt)} → until{" "}
+                    {formatBookingEnd(b.startAt, b.requestedEndAt!)}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <ApproveExtensionButton bookingId={b.id} />
+                  <form action={rejectExtensionRequestAction}>
+                    <input type="hidden" name="bookingId" value={b.id} />
+                    <Button size="sm" variant="danger">
+                      Reject
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+      )}
+
       {pending.length > 0 && (
         <Card>
           <CardHeader>

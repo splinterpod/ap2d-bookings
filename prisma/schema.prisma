@@ -165,6 +165,8 @@ model Booking {
   endAt        DateTime
   // Original booked end; endAt may be shortened early on sign-out to free the calendar slot.
   scheduledEndAt DateTime
+  // Member extension request (admin-mode); applied on admin approval.
+  requestedEndAt DateTime?
   status       BookingStatus @default(CONFIRMED)
   notes        String?
   noShow       Boolean       @default(false)

@@ -6,8 +6,9 @@ import { cancelBookingAction } from "@/actions/booking";
 import { SessionForm, type ExistingReading } from "@/components/session-form";
 import { CancelBookingButton } from "@/components/cancel-booking-button";
 import { ExtendBookingForm } from "@/components/extend-booking-form";
+import { CancelExtensionRequestButton } from "@/components/cancel-extension-request-button";
 import { finalLaserReadings } from "@/lib/laser-session";
-import { resolveBookingExtension } from "@/lib/booking-extension";
+import { resolveBookingExtension, resolveExtensionRequest } from "@/lib/booking-extension";
 import { autoSignOutExpiredSessions, processSessionRemindersAndNoShows } from "@/lib/session-lifecycle";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,20 +47,56 @@ export default async function BookingsPage() {
     .filter((b) => b.endAt >= now && b.status !== "CANCELLED" && b.status !== "REJECTED")
     .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
 
-  const extensionByBookingId = new Map(
-    (
-      await Promise.all(
-        upcoming.map(async (b) => {
-          if (!b.instrument.bookingAdminMode) return null;
-          if (b.startAt > now || b.endAt <= now) return null;
-          if (b.session?.signedOutAt) return null;
-          const info = await resolveBookingExtension(b, b.instrument, user.id, user.role === "ADMIN", now);
+  const isAdmin = user.role === "ADMIN";
+
+  type ExtensionEntry = {
+    bookingId: string;
+    currentEndLabel: string;
+    options: { newEndAtIso: string; label: string; extraMinutes: number }[];
+    requestMode: boolean;
+    pendingEndLabel?: string;
+  };
+
+  const extensionEntries: [string, ExtensionEntry][] = (
+    await Promise.all(
+      upcoming.map(async (b): Promise<[string, ExtensionEntry] | null> => {
+        if (!b.instrument.bookingAdminMode) return null;
+        if (b.status !== "CONFIRMED") return null;
+        if (b.endAt <= now) return null;
+        if (b.session?.signedOutAt) return null;
+
+        if (isAdmin) {
+          if (b.startAt > now) return null;
+          const info = await resolveBookingExtension(b, b.instrument, user.id, true, now);
           if (!info.canExtend) return null;
-          return [b.id, info] as const;
-        }),
-      )
-    ).filter((x): x is [string, Awaited<ReturnType<typeof resolveBookingExtension>>] => x !== null),
-  );
+          return [
+            b.id,
+            {
+              bookingId: info.bookingId,
+              currentEndLabel: info.currentEndLabel,
+              options: info.options,
+              requestMode: false,
+            },
+          ];
+        }
+
+        const info = await resolveExtensionRequest(b, b.instrument, now);
+        if (!info.canExtend && !b.requestedEndAt) return null;
+        return [
+          b.id,
+          {
+            bookingId: info.bookingId,
+            currentEndLabel: info.currentEndLabel,
+            options: info.canExtend ? info.options : [],
+            requestMode: true,
+            pendingEndLabel: info.pendingEndLabel,
+          },
+        ];
+      }),
+    )
+  ).filter((x): x is [string, ExtensionEntry] => x !== null);
+
+  const extensionByBookingId = new Map(extensionEntries);
   const past = bookings.filter(
     (b) => b.endAt < now || b.status === "CANCELLED" || b.status === "REJECTED",
   );
@@ -82,6 +119,9 @@ export default async function BookingsPage() {
           const canSignOut = b.session && !b.session.signedOutAt;
           const releasedEarly = b.session?.signedOutAt && b.scheduledEndAt > b.endAt;
           const extension = extensionByBookingId.get(b.id);
+          const pendingExtension = b.requestedEndAt
+            ? formatBookingEnd(b.startAt, b.requestedEndAt)
+            : undefined;
           const sessionReadings: ExistingReading[] = b.session
             ? finalLaserReadings(b.session.readings).map((r) => ({
                 wavelengthNm: r.wavelengthNm,
@@ -135,12 +175,31 @@ export default async function BookingsPage() {
                   </div>
                 )}
 
-                {extension && (
+                {b.status === "PENDING" && (
+                  <Alert tone="info">
+                    Awaiting administrator approval. You will not be able to sign in until this booking is
+                    confirmed.
+                  </Alert>
+                )}
+
+                {pendingExtension && !extension?.options.length && (
+                  <Alert tone="info">
+                    Extension request pending until {pendingExtension} — awaiting admin approval.
+                  </Alert>
+                )}
+
+                {extension && extension.options.length > 0 && (
                   <ExtendBookingForm
                     bookingId={extension.bookingId}
                     currentEndLabel={extension.currentEndLabel}
                     options={extension.options}
+                    requestMode={extension.requestMode}
+                    pendingEndLabel={extension.pendingEndLabel}
                   />
+                )}
+
+                {b.requestedEndAt && !isAdmin && (
+                  <CancelExtensionRequestButton bookingId={b.id} />
                 )}
 
                 {!b.session && !needsSignIn && b.status === "CONFIRMED" && now < signInOpen && (
@@ -153,6 +212,7 @@ export default async function BookingsPage() {
                   <CancelBookingButton
                     bookingId={b.id}
                     label={`${b.instrument.name} · ${formatBookingRange(b.startAt, b.scheduledEndAt, "EEE MMM d, h:mm a")}`}
+                    buttonLabel={b.status === "PENDING" ? "Cancel request" : undefined}
                   />
                 )}
               </CardBody>

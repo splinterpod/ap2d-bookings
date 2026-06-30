@@ -16,21 +16,6 @@ import {
 } from "@/components/calendar/calendar-drag";
 import { useLiveAppNow } from "@/components/calendar/use-live-app-now";
 import { buildStartSlotOptions, formatMinuteLabel } from "@/lib/booking-grid";
-import { MemberUseNowPanel } from "@/components/member-use-now-panel";
-
-type MemberNowState = {
-  extension: {
-    bookingId: string;
-    currentEndLabel: string;
-    options: { newEndAtIso: string; label: string; extraMinutes: number }[];
-  } | null;
-  bookNow: {
-    dateKey: string;
-    startMin: number;
-    durationOptions: { minutes: number; endLabel: string }[];
-  } | null;
-  unavailableReason?: string;
-};
 import { Button } from "@/components/ui/button";
 import { Label, Select, Textarea } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
@@ -85,7 +70,6 @@ type Props = {
   limitMinutes: number | null;
   usedStandardMinutes: number;
   myWaitlist: { id: string; startKey: string; startMin: number }[];
-  memberNowState?: MemberNowState | null;
 };
 
 const HOUR_PX = 44;
@@ -118,11 +102,15 @@ export function CalendarClient(props: Props) {
     days,
     bookings,
     canBook,
+    isAdmin,
     bookableUsers,
     limitMinutes,
     usedStandardMinutes,
-    memberNowState,
   } = props;
+  const memberRequestMode = instrument.bookingAdminMode && !isAdmin;
+  const maxBookingMinutes = memberRequestMode
+    ? instrument.advanceBookingDays * 24 * 60
+    : instrument.maxSessionMinutes;
   const liveNow = useLiveAppNow(appTimezone, { dateKey: nowKey, minutes: nowMin });
   const scrollRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -158,9 +146,9 @@ export function CalendarClient(props: Props) {
         nowMin: liveNow.minutes,
         duration,
         occupied: occupiedForDate,
-        minNoticeMinutes: instrument.minNoticeMinutes,
+        minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
       }),
-    [date, liveNow, duration, occupiedForDate, instrument.minNoticeMinutes],
+    [date, liveNow, duration, occupiedForDate, instrument.minNoticeMinutes, memberRequestMode],
   );
 
   useEffect(() => {
@@ -204,11 +192,11 @@ export function CalendarClient(props: Props) {
       nowKey: liveNow.dateKey,
       nowMin: liveNow.minutes,
       slotMinutes: instrument.slotMinutes,
-      maxSessionMinutes: instrument.maxSessionMinutes,
-      minNoticeMinutes: instrument.minNoticeMinutes,
+      maxSessionMinutes: maxBookingMinutes,
+      minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
       occupied: getOccupiedRanges(drag.dayKey, bookings),
     });
-  }, [drag, liveNow, instrument.slotMinutes, instrument.maxSessionMinutes, instrument.minNoticeMinutes, bookings]);
+  }, [drag, liveNow, instrument.slotMinutes, maxBookingMinutes, instrument.minNoticeMinutes, memberRequestMode, bookings]);
 
   const dragBookable = useMemo(() => {
     if (!dragPreview || !drag) return false;
@@ -232,8 +220,8 @@ export function CalendarClient(props: Props) {
         nowKey: liveNow.dateKey,
         nowMin: liveNow.minutes,
         slotMinutes: instrument.slotMinutes,
-        maxSessionMinutes: instrument.maxSessionMinutes,
-        minNoticeMinutes: instrument.minNoticeMinutes,
+        maxSessionMinutes: maxBookingMinutes,
+        minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
         occupied: getOccupiedRanges(dayKey, bookings),
       });
       if (!normalized) {
@@ -297,11 +285,11 @@ export function CalendarClient(props: Props) {
 
   const durationOptions = useMemo(() => {
     const opts: number[] = [];
-    for (let d = instrument.slotMinutes; d <= instrument.maxSessionMinutes; d += instrument.slotMinutes) {
+    for (let d = instrument.slotMinutes; d <= maxBookingMinutes; d += instrument.slotMinutes) {
       opts.push(d);
     }
     return opts;
-  }, [instrument.slotMinutes, instrument.maxSessionMinutes]);
+  }, [instrument.slotMinutes, maxBookingMinutes]);
 
   function submit(kind: "book" | "waitlist") {
     if (startMin === null) return;
@@ -314,8 +302,7 @@ export function CalendarClient(props: Props) {
     );
     fd.set("durationMinutes", String(duration));
     fd.set("notes", notes);
-    if (selected?.isNow) fd.set("walkUp", "1");
-    if (instrument.bookingAdminMode && targetUserId) fd.set("targetUserId", targetUserId);
+    if (instrument.bookingAdminMode && isAdmin && targetUserId) fd.set("targetUserId", targetUserId);
 
     startTransition(async () => {
       setMessage(null);
@@ -333,12 +320,6 @@ export function CalendarClient(props: Props) {
       }
     });
   }
-
-  const showMemberPanel =
-    instrument.bookingAdminMode &&
-    !canBook &&
-    memberNowState &&
-    (memberNowState.extension || memberNowState.bookNow || memberNowState.unavailableReason);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -552,12 +533,10 @@ export function CalendarClient(props: Props) {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="mb-3 text-base font-semibold text-slate-900">
           {instrument.bookingAdminMode
-            ? canBook
+            ? isAdmin
               ? "Book for user"
-              : showMemberPanel
-                ? memberNowState?.extension
-                  ? "Extend booking"
-                  : "Use now"
+              : memberRequestMode
+                ? "Request time"
                 : "See calendar"
             : "Book a session"}
         </h2>
@@ -569,23 +548,22 @@ export function CalendarClient(props: Props) {
           </p>
         )}
 
-        {!canBook && !showMemberPanel ? (
+        {!canBook ? (
           <Alert tone="info">
             {instrument.bookingAdminMode
               ? "View availability on the calendar. Contact an administrator to schedule time on this instrument."
               : "Booking is unavailable for you on this instrument right now."}
           </Alert>
-        ) : showMemberPanel && memberNowState ? (
-          <MemberUseNowPanel
-            instrumentId={instrument.id}
-            extension={memberNowState.extension}
-            bookNow={memberNowState.bookNow}
-            unavailableReason={memberNowState.unavailableReason}
-          />
         ) : (
           <div className="space-y-3">
             {message && <Alert tone={message.tone}>{message.text}</Alert>}
-            {instrument.bookingAdminMode && (
+            {memberRequestMode && (
+              <Alert tone="info">
+                Your request will be reviewed by an administrator. It will not appear on the calendar until
+                approved.
+              </Alert>
+            )}
+            {instrument.bookingAdminMode && isAdmin && (
               <div>
                 <Label htmlFor="b-user">User</Label>
                 <Select
@@ -695,7 +673,7 @@ export function CalendarClient(props: Props) {
                   Join waitlist for this slot
                 </Button>
               </div>
-            ) : selected?.busy && instrument.bookingAdminMode ? (
+            ) : selected?.busy && instrument.bookingAdminMode && isAdmin ? (
               <Alert tone="warning">This slot is already booked.</Alert>
             ) : (
               <Button
@@ -704,11 +682,17 @@ export function CalendarClient(props: Props) {
                   isPending ||
                   startMin === null ||
                   !withinAdvance ||
-                  (instrument.bookingAdminMode && !targetUserId)
+                  (instrument.bookingAdminMode && isAdmin && !targetUserId)
                 }
                 onClick={() => submit("book")}
               >
-                {isPending ? "Working…" : instrument.bookingAdminMode ? "Create booking" : "Book session"}
+                {isPending
+                  ? "Working…"
+                  : memberRequestMode
+                    ? "Submit request"
+                    : instrument.bookingAdminMode
+                      ? "Create booking"
+                      : "Book session"}
               </Button>
             )}
           </div>

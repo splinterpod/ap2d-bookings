@@ -18,6 +18,8 @@ type Props = {
   currentEndLabel: string;
   options: ExtensionOption[];
   compact?: boolean;
+  requestMode?: boolean;
+  pendingEndLabel?: string;
 };
 
 export function ExtendBookingForm({
@@ -25,6 +27,8 @@ export function ExtendBookingForm({
   currentEndLabel,
   options,
   compact = false,
+  requestMode = false,
+  pendingEndLabel,
 }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -53,12 +57,17 @@ export function ExtendBookingForm({
     <div className={compact ? "space-y-2" : "space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3"}>
       {!compact && (
         <p className="text-sm font-semibold text-slate-800">
-          Extend booking (currently until {currentEndLabel})
+          {requestMode
+            ? `Request extension (currently until ${currentEndLabel})`
+            : `Extend booking (currently until ${currentEndLabel})`}
         </p>
+      )}
+      {pendingEndLabel && (
+        <Alert tone="info">Pending extension until {pendingEndLabel} — awaiting admin approval.</Alert>
       )}
       {message && <Alert tone={message.tone}>{message.text}</Alert>}
       <div>
-        <Label htmlFor={`extend-${bookingId}`}>Extend to</Label>
+        <Label htmlFor={`extend-${bookingId}`}>{requestMode ? "Extend to" : "Extend to"}</Label>
         <Select id={`extend-${bookingId}`} value={selected} onChange={(e) => setSelected(e.target.value)}>
           {options.map((o) => (
             <option key={o.newEndAtIso} value={o.newEndAtIso}>
@@ -74,7 +83,13 @@ export function ExtendBookingForm({
         disabled={isPending || !selected}
         onClick={submit}
       >
-        {isPending ? "Extending…" : "Extend booking"}
+        {isPending
+          ? requestMode
+            ? "Submitting…"
+            : "Extending…"
+          : requestMode
+            ? "Request extension"
+            : "Extend booking"}
       </Button>
     </div>
   );

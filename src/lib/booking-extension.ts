@@ -48,9 +48,88 @@ export type MemberNowState = {
   unavailableReason?: string;
 };
 
-type BookingRow = Pick<Booking, "id" | "userId" | "startAt" | "endAt" | "scheduledEndAt" | "status" | "instrumentId"> & {
+type BookingRow = Pick<
+  Booking,
+  "id" | "userId" | "startAt" | "endAt" | "scheduledEndAt" | "requestedEndAt" | "status" | "instrumentId"
+> & {
   session?: Pick<InstrumentSession, "signedOutAt"> | null;
 };
+
+export type ExtensionRequestInfo = ExtensionInfo & {
+  pendingEndLabel?: string;
+};
+
+/** Member extension request (admin mode) — options up to advance window; admin approves. */
+export function resolveExtensionRequest(
+  booking: BookingRow,
+  instrument: Instrument,
+  now = new Date(),
+): ExtensionRequestInfo {
+  const base: ExtensionRequestInfo = {
+    canExtend: false,
+    options: [],
+    currentEndLabel: formatBookingEnd(booking.startAt, booking.endAt),
+    bookingId: booking.id,
+  };
+
+  if (booking.status !== "CONFIRMED") {
+    return { ...base, reason: "Only confirmed bookings can be extended." };
+  }
+  if (!instrument.bookingAdminMode) {
+    return { ...base, reason: "Extension requests are only available in booking admin mode." };
+  }
+  if (booking.endAt <= now) {
+    return { ...base, reason: "This booking has already ended." };
+  }
+  if (booking.session?.signedOutAt) {
+    return { ...base, reason: "You have already signed out of this session." };
+  }
+  if (instrument.maintenance) {
+    return { ...base, reason: "Instrument is under maintenance." };
+  }
+  if (booking.requestedEndAt) {
+    return {
+      ...base,
+      reason: "You already have a pending extension request.",
+      pendingEndLabel: formatBookingEnd(booking.startAt, booking.requestedEndAt),
+    };
+  }
+
+  const maxEnd = addMinutes(booking.startAt, instrument.advanceBookingDays * 24 * 60);
+  const options = buildExtensionOptions(booking.startAt, booking.endAt, maxEnd, instrument.slotMinutes);
+  if (options.length === 0) {
+    return { ...base, reason: "No longer extension options within the booking window." };
+  }
+
+  return { ...base, canExtend: true, options };
+}
+
+export function validateExtensionRequest(
+  booking: BookingRow,
+  instrument: Instrument,
+  newEndAt: Date,
+  now = new Date(),
+): { ok: true } | { ok: false; error: string } {
+  if (newEndAt <= booking.endAt) {
+    return { ok: false, error: "New end time must be after your current end time." };
+  }
+  const endMin = parseClock(clockTime(newEndAt));
+  if (!isOnBookingGrid(endMin, BOOKING_GRID_MINUTES)) {
+    return { ok: false, error: `End time must be on a ${BOOKING_GRID_MINUTES}-minute interval.` };
+  }
+  const maxEnd = addMinutes(booking.startAt, instrument.advanceBookingDays * 24 * 60);
+  if (newEndAt > maxEnd) {
+    return { ok: false, error: "That extension exceeds the booking window." };
+  }
+  if (newEndAt <= now) {
+    return { ok: false, error: "New end time must be in the future." };
+  }
+  const info = resolveExtensionRequest(booking, instrument, now);
+  if (!info.options.some((o) => new Date(o.newEndAtIso).getTime() === newEndAt.getTime())) {
+    return { ok: false, error: "Choose a valid extension from the list." };
+  }
+  return { ok: true };
+}
 
 export async function instrumentInUse(instrumentId: string): Promise<boolean> {
   const open = await prisma.instrumentSession.findFirst({

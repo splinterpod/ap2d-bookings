@@ -20,7 +20,6 @@ import {
 import { CalendarClient, type SerBooking } from "@/components/calendar/calendar-client";
 import { Alert } from "@/components/ui/alert";
 import { APP_TIMEZONE } from "@/lib/env";
-import { buildMemberNowState } from "@/lib/booking-extension";
 
 export const dynamic = "force-dynamic";
 
@@ -142,24 +141,6 @@ export default async function CalendarPage({
 
   const now = new Date();
   const nowKey = dateKey(now);
-  const nowMin = parseClock(clockTime(now));
-  const canUseNow =
-    bookingAdminMode && !isAdmin && isTrained && !instrument.maintenance;
-  const memberNowState = canUseNow
-    ? await buildMemberNowState(
-        user.id,
-        instrument,
-        serBookings.map((b) => ({
-          startKey: b.startKey,
-          startMin: b.startMin,
-          endKey: b.endKey,
-          endMin: b.endMin,
-        })),
-        nowKey,
-        nowMin,
-        now,
-      )
-    : null;
   const weekStartKey = dateKey(weekStart);
   const weekEndKey = dateKey(addDays(weekStart, 6));
   const isCurrentWeek = nowKey >= weekStartKey && nowKey <= weekEndKey;
@@ -204,7 +185,7 @@ export default async function CalendarPage({
       {bookingAdminMode && !isAdmin && (
         <Alert tone="info">
           {isTrained
-            ? "Advance bookings are scheduled by administrators. When the instrument is free, use the panel on the right to book now or extend an ongoing session."
+            ? "Submit a time request using the form on the right. Requests appear on the calendar only after an administrator approves them."
             : "Bookings on this instrument are scheduled by administrators. View the calendar below; contact an admin to request time."}
         </Alert>
       )}
@@ -238,7 +219,7 @@ export default async function CalendarPage({
         }}
         days={days}
         bookings={serBookings}
-        canBook={!instrument.maintenance && (bookingAdminMode ? isAdmin : isTrained)}
+        canBook={!instrument.maintenance && isTrained}
         isAdmin={isAdmin}
         showBookerNames={showBookerNames}
         bookableUsers={bookableUsers}
@@ -249,7 +230,6 @@ export default async function CalendarPage({
           startKey: dateKey(w.startAt),
           startMin: parseClock(clockTime(w.startAt)),
         }))}
-        memberNowState={memberNowState}
       />
     </div>
   );

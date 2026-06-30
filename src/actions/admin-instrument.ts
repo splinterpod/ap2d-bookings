@@ -7,7 +7,8 @@ import { audit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
 import { APP_URL } from "@/lib/env";
 import { formatHours, violatesUserBookingGap } from "@/lib/booking";
-import { formatTz } from "@/lib/time";
+import { validateBookingExtension } from "@/lib/booking-extension";
+import { formatTz, formatBookingEnd } from "@/lib/time";
 
 function intOrNull(value: FormDataEntryValue | null): number | null {
   if (value === null || value === "") return null;
@@ -160,6 +161,7 @@ export async function approveBookingAction(
   }
   revalidatePath("/admin/bookings");
   revalidatePath("/calendar");
+  revalidatePath("/bookings");
   return undefined;
 }
 
@@ -185,4 +187,78 @@ export async function rejectBookingAction(formData: FormData): Promise<void> {
   }
   revalidatePath("/admin/bookings");
   revalidatePath("/calendar");
+  revalidatePath("/bookings");
+}
+
+export async function approveExtensionRequestAction(
+  _prev: { error?: string } | undefined,
+  formData: FormData,
+): Promise<{ error?: string } | undefined> {
+  const admin = await requireAdmin();
+  const id = String(formData.get("bookingId"));
+  const booking = await prisma.booking.findUnique({
+    where: { id },
+    include: { instrument: true, user: true },
+  });
+  if (!booking || booking.status !== "CONFIRMED" || !booking.requestedEndAt) {
+    return { error: "Extension request not found or already processed." };
+  }
+
+  const newEndAt = booking.requestedEndAt;
+  const validation = await validateBookingExtension(
+    booking,
+    booking.instrument,
+    booking.userId,
+    newEndAt,
+  );
+  if (!validation.ok) return { error: validation.error };
+
+  await prisma.booking.update({
+    where: { id },
+    data: { endAt: newEndAt, scheduledEndAt: newEndAt, requestedEndAt: null },
+  });
+  await audit(admin.id, "booking.extend_approve", { type: "booking", id }, {
+    newEndAt: newEndAt.toISOString(),
+  });
+
+  if (booking.user.notifyConfirmations) {
+    await sendEmail({
+      to: booking.user.email,
+      subject: "Extension approved",
+      heading: "Booking extension approved",
+      body: `<p>Your booking for <strong>${booking.instrument.name}</strong> is now extended until ${formatBookingEnd(booking.startAt, newEndAt)}.</p>`,
+      cta: { label: "View my bookings", href: `${APP_URL}/bookings` },
+    });
+  }
+
+  revalidatePath("/admin/bookings");
+  revalidatePath("/calendar");
+  revalidatePath("/bookings");
+  return undefined;
+}
+
+export async function rejectExtensionRequestAction(formData: FormData): Promise<void> {
+  const admin = await requireAdmin();
+  const id = String(formData.get("bookingId"));
+  const booking = await prisma.booking.findUnique({
+    where: { id },
+    include: { instrument: true, user: true },
+  });
+  if (!booking || booking.status !== "CONFIRMED" || !booking.requestedEndAt) return;
+
+  await prisma.booking.update({ where: { id }, data: { requestedEndAt: null } });
+  await audit(admin.id, "booking.extend_reject", { type: "booking", id });
+
+  if (booking.user.notifyConfirmations) {
+    await sendEmail({
+      to: booking.user.email,
+      subject: "Extension not approved",
+      heading: "Extension request not approved",
+      body: `<p>Your extension request for <strong>${booking.instrument.name}</strong> (until ${formatBookingEnd(booking.startAt, booking.requestedEndAt)}) was not approved. Your booking remains until ${formatBookingEnd(booking.startAt, booking.endAt)}.</p>`,
+    });
+  }
+
+  revalidatePath("/admin/bookings");
+  revalidatePath("/calendar");
+  revalidatePath("/bookings");
 }
