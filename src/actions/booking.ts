@@ -180,7 +180,28 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     },
   });
   if (overlap) {
-    return { error: "That time was just taken. Please choose another slot." };
+    return {
+      error: memberRequest
+        ? "That time overlaps an existing confirmed booking on the instrument."
+        : "That time was just taken. Please choose another slot.",
+    };
+  }
+
+  if (memberRequest) {
+    const superseded = await prisma.booking.findMany({
+      where: {
+        userId: bookForUser.id,
+        instrumentId,
+        status: "PENDING",
+        startAt: { lt: endAt },
+        endAt: { gt: startAt },
+      },
+      select: { id: true },
+    });
+    for (const old of superseded) {
+      await prisma.booking.update({ where: { id: old.id }, data: { status: "CANCELLED" } });
+      await audit(user.id, "booking.request_supersede", { type: "booking", id: old.id });
+    }
   }
 
   if (!instrument.bookingAdminMode && instrument.minGapBetweenUserBookingsMinutes > 0) {
