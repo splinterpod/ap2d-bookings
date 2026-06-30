@@ -188,7 +188,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
   }
 
   if (memberRequest) {
-    const superseded = await prisma.booking.findMany({
+    const ownPending = await prisma.booking.findFirst({
       where: {
         userId: bookForUser.id,
         instrumentId,
@@ -196,11 +196,12 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
         startAt: { lt: endAt },
         endAt: { gt: startAt },
       },
-      select: { id: true },
     });
-    for (const old of superseded) {
-      await prisma.booking.update({ where: { id: old.id }, data: { status: "CANCELLED" } });
-      await audit(user.id, "booking.request_supersede", { type: "booking", id: old.id });
+    if (ownPending) {
+      return {
+        error:
+          "That overlaps one of your pending requests. Cancel it from My bookings before submitting a new one.",
+      };
     }
   }
 

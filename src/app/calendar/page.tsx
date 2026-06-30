@@ -125,6 +125,37 @@ export default async function CalendarPage({
     };
   });
 
+  const myPendingRequests =
+    bookingAdminMode && !isAdmin
+      ? await prisma.booking.findMany({
+          where: {
+            userId: user.id,
+            instrumentId: instrument.id,
+            status: "PENDING",
+            startAt: { lt: weekEnd },
+            endAt: { gt: weekStart },
+          },
+          orderBy: { startAt: "asc" },
+        })
+      : [];
+
+  const serMyPendingRequests: SerBooking[] = myPendingRequests.map((b) => {
+    const labels = formatCalendarBookingLabels(b.startAt, b.endAt);
+    return {
+      id: b.id,
+      mine: true,
+      status: b.status,
+      noShow: false,
+      startKey: dateKey(b.startAt),
+      startMin: parseClock(clockTime(b.startAt)),
+      endKey: dateKey(b.endAt),
+      endMin: parseClock(clockTime(b.endAt)),
+      startLabel: labels.startLabel,
+      endLabel: labels.endLabel,
+      rangeLabel: labels.rangeLabel,
+    };
+  });
+
   const myWaitlist = await prisma.waitlistEntry.findMany({
     where: {
       userId: user.id,
@@ -185,7 +216,7 @@ export default async function CalendarPage({
       {bookingAdminMode && !isAdmin && (
         <Alert tone="info">
           {isTrained
-            ? "Submit a time request using the form on the right. Requests appear on the calendar only after an administrator approves them."
+            ? "Submit a time request using the form on the right. Your pending requests appear on the calendar in grey (only you can see them). Cancel a pending request in My bookings before submitting an overlapping one."
             : "Bookings on this instrument are scheduled by administrators. View the calendar below; contact an admin to request time."}
         </Alert>
       )}
@@ -219,6 +250,7 @@ export default async function CalendarPage({
         }}
         days={days}
         bookings={serBookings}
+        myPendingRequests={serMyPendingRequests}
         canBook={!instrument.maintenance && isTrained}
         isAdmin={isAdmin}
         showBookerNames={showBookerNames}

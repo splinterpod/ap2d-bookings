@@ -63,6 +63,8 @@ type Props = {
   };
   days: Day[];
   bookings: SerBooking[];
+  /** Own pending requests — shown as grey placeholders for the requester only. */
+  myPendingRequests?: SerBooking[];
   canBook: boolean;
   isAdmin: boolean;
   showBookerNames: boolean;
@@ -101,6 +103,7 @@ export function CalendarClient(props: Props) {
     instrument,
     days,
     bookings,
+    myPendingRequests = [],
     canBook,
     isAdmin,
     bookableUsers,
@@ -108,6 +111,10 @@ export function CalendarClient(props: Props) {
     usedStandardMinutes,
   } = props;
   const memberRequestMode = instrument.bookingAdminMode && !isAdmin;
+  const occupiedBlocks = useMemo(
+    () => (memberRequestMode ? [...bookings, ...myPendingRequests] : bookings),
+    [bookings, myPendingRequests, memberRequestMode],
+  );
   const maxBookingMinutes = memberRequestMode
     ? instrument.advanceBookingDays * 24 * 60
     : instrument.maxSessionMinutes;
@@ -131,8 +138,8 @@ export function CalendarClient(props: Props) {
   }, []);
 
   const occupiedForDate = useMemo(
-    () => getOccupiedRanges(date, bookings),
-    [bookings, date],
+    () => getOccupiedRanges(date, occupiedBlocks),
+    [occupiedBlocks, date],
   );
 
   const dayIndex = days.findIndex((d) => d.key === date);
@@ -194,9 +201,9 @@ export function CalendarClient(props: Props) {
       slotMinutes: instrument.slotMinutes,
       maxSessionMinutes: maxBookingMinutes,
       minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
-      occupied: getOccupiedRanges(drag.dayKey, bookings),
+      occupied: getOccupiedRanges(drag.dayKey, occupiedBlocks),
     });
-  }, [drag, liveNow, instrument.slotMinutes, maxBookingMinutes, instrument.minNoticeMinutes, memberRequestMode, bookings]);
+  }, [drag, liveNow, instrument.slotMinutes, maxBookingMinutes, instrument.minNoticeMinutes, memberRequestMode, occupiedBlocks]);
 
   const dragBookable = useMemo(() => {
     if (!dragPreview || !drag) return false;
@@ -207,9 +214,9 @@ export function CalendarClient(props: Props) {
       duration: dragPreview.duration,
       dayIndex,
       advanceBookingDays: instrument.advanceBookingDays,
-      bookings,
+      bookings: occupiedBlocks,
     });
-  }, [dragPreview, drag, days, instrument.advanceBookingDays, bookings]);
+  }, [dragPreview, drag, days, instrument.advanceBookingDays, occupiedBlocks]);
 
   const finishDrag = useCallback(
     (dayKey: string, anchorMin: number, currentMin: number) => {
@@ -222,7 +229,7 @@ export function CalendarClient(props: Props) {
         slotMinutes: instrument.slotMinutes,
         maxSessionMinutes: maxBookingMinutes,
         minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
-        occupied: getOccupiedRanges(dayKey, bookings),
+        occupied: getOccupiedRanges(dayKey, occupiedBlocks),
       });
       if (!normalized) {
         setMessage({ tone: "error", text: "That time is not available to book." });
@@ -235,10 +242,10 @@ export function CalendarClient(props: Props) {
         duration: normalized.duration,
         dayIndex,
         advanceBookingDays: instrument.advanceBookingDays,
-        bookings,
+        bookings: occupiedBlocks,
       });
       if (!bookable) {
-        const busy = !isRangeFree(dayKey, normalized.start, normalized.start + normalized.duration, bookings);
+        const busy = !isRangeFree(dayKey, normalized.start, normalized.start + normalized.duration, occupiedBlocks);
         setMessage({
           tone: "error",
           text: busy
@@ -249,7 +256,7 @@ export function CalendarClient(props: Props) {
       }
       applySelection(dayKey, normalized.start, normalized.duration);
     },
-    [liveNow, instrument, days, bookings, applySelection],
+    [liveNow, instrument, days, occupiedBlocks, applySelection],
   );
 
   const showNowLine = weekNav.isCurrentWeek && days.some((d) => d.key === liveNow.dateKey);
@@ -496,6 +503,43 @@ export function CalendarClient(props: Props) {
                       </div>
                     );
                   })}
+                {memberRequestMode &&
+                  myPendingRequests
+                    .filter((b) => b.startKey <= d.key && b.endKey >= d.key)
+                    .map((b) => {
+                      const isStartDay = b.startKey === d.key;
+                      const isEndDay = b.endKey === d.key;
+                      const segStart = isStartDay ? b.startMin : 0;
+                      const segEnd = isEndDay ? b.endMin : 1440;
+                      const top = (segStart / 60) * HOUR_PX;
+                      const height = Math.max(16, ((segEnd - segStart) / 60) * HOUR_PX);
+                      const timeLabel = isStartDay
+                        ? b.rangeLabel
+                        : isEndDay
+                          ? `Until ${b.endLabel}`
+                          : b.rangeLabel;
+                      return (
+                        <div
+                          key={`pending-${b.id}-${d.key}`}
+                          className="pointer-events-none absolute left-0.5 right-0.5 z-[19] overflow-hidden rounded-md border border-dashed border-slate-400 bg-slate-100/90 px-1 py-0.5 text-[10px] leading-snug text-slate-500"
+                          style={{ top, height }}
+                          title={`Your request (pending) · ${b.rangeLabel}`}
+                        >
+                          {isStartDay && (
+                            <div className="font-semibold text-slate-600">Your request</div>
+                          )}
+                          {!isStartDay && (
+                            <div className="font-semibold opacity-90">↳ continued</div>
+                          )}
+                          {height >= 14 && (
+                            <div className="whitespace-normal break-words opacity-90">{timeLabel}</div>
+                          )}
+                          {isStartDay && height >= 22 && (
+                            <div className="italic opacity-80">awaiting approval</div>
+                          )}
+                        </div>
+                      );
+                    })}
                 {canDragDay && (
                   <div
                     className="absolute inset-0 z-[25] cursor-crosshair touch-none"
@@ -517,6 +561,12 @@ export function CalendarClient(props: Props) {
           <span className="flex items-center gap-1">
             <span className="inline-block h-3 w-3 rounded border border-slate-300 bg-slate-200" /> Booked
           </span>
+          {memberRequestMode && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded border border-dashed border-slate-400 bg-slate-100" />{" "}
+              Your pending request
+            </span>
+          )}
           {canBook && !instrument.maintenance && (
             <span className="flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded border-2 border-brand-400 bg-brand-100/40" /> Drag to select (15 min)
@@ -559,8 +609,8 @@ export function CalendarClient(props: Props) {
             {message && <Alert tone={message.tone}>{message.text}</Alert>}
             {memberRequestMode && (
               <Alert tone="info">
-                Your request will be reviewed by an administrator. It will not appear on the calendar until
-                approved.
+                Grey dashed blocks are your pending requests (only visible to you). Cancel them in My bookings
+                before submitting an overlapping request.
               </Alert>
             )}
             {instrument.bookingAdminMode && isAdmin && (
@@ -673,6 +723,11 @@ export function CalendarClient(props: Props) {
                   Join waitlist for this slot
                 </Button>
               </div>
+            ) : selected?.busy && memberRequestMode ? (
+              <Alert tone="warning">
+                This time overlaps a confirmed booking or one of your pending requests. Cancel pending requests
+                in My bookings before submitting a new one.
+              </Alert>
             ) : selected?.busy && instrument.bookingAdminMode && isAdmin ? (
               <Alert tone="warning">This slot is already booked.</Alert>
             ) : (
@@ -682,6 +737,7 @@ export function CalendarClient(props: Props) {
                   isPending ||
                   startMin === null ||
                   !withinAdvance ||
+                  (memberRequestMode && !!selected?.busy) ||
                   (instrument.bookingAdminMode && isAdmin && !targetUserId)
                 }
                 onClick={() => submit("book")}
