@@ -77,19 +77,25 @@ export function nowLocal(): { dateKey: string; minutes: number; clock: string } 
 
 /** End time for a booking range; includes date when on a different day than `startAt`. */
 export function formatBookingEnd(startAt: Date, endAt: Date): string {
-  return dateKey(startAt) === dateKey(endAt)
-    ? formatTz(endAt, "h:mm a")
-    : formatTz(endAt, "MMM d, h:mm a");
+  const startKey = dateKey(startAt);
+  const endKey = dateKey(endAt);
+  if (startKey === endKey) {
+    return formatTz(endAt, "h:mm a");
+  }
+  // 00:00 on the next calendar day = midnight at the close of the start day.
+  if (parseClock(clockTime(endAt)) === 0) {
+    return "midnight";
+  }
+  return formatTz(endAt, "MMM d, h:mm a");
 }
 
-/** e.g. "Jun 30, 3:00 PM – 11:00 PM" or "Jun 30, 3:00 PM – Jul 1, 3:00 PM". */
+/** e.g. "Jun 30, 3:00 PM – 11:00 PM" or "Jun 30, 3:00 PM – midnight". */
 export function formatBookingRange(
   startAt: Date,
   endAt: Date,
   startFmt: string = "MMM d, h:mm a",
 ): string {
-  const endFmt = dateKey(startAt) === dateKey(endAt) ? "h:mm a" : startFmt;
-  return `${formatTz(startAt, startFmt)} – ${formatTz(endAt, endFmt)}`;
+  return `${formatTz(startAt, startFmt)} – ${formatBookingEnd(startAt, endAt)}`;
 }
 
 /** Calendar block labels and full range for tooltips. */
