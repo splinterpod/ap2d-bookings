@@ -123,7 +123,7 @@ export async function approveBookingAction(
     return { error: "Cannot approve — this slot overlaps an existing confirmed booking." };
   }
 
-  if (booking.instrument.minGapBetweenUserBookingsMinutes > 0) {
+  if (!booking.instrument.bookingAdminMode && booking.instrument.minGapBetweenUserBookingsMinutes > 0) {
     const userBookings = await prisma.booking.findMany({
       where: {
         userId: booking.userId,

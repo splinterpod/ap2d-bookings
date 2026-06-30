@@ -332,7 +332,7 @@ export async function validateBookingExtension(
     return { ok: false, error: "That extension overlaps another booking." };
   }
 
-  if (instrument.minGapBetweenUserBookingsMinutes > 0) {
+  if (!instrument.bookingAdminMode && instrument.minGapBetweenUserBookingsMinutes > 0) {
     const others = await prisma.booking.findMany({
       where: {
         userId: bookForUserId,

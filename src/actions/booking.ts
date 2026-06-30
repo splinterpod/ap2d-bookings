@@ -183,7 +183,7 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     return { error: "That time was just taken. Please choose another slot." };
   }
 
-  if (instrument.minGapBetweenUserBookingsMinutes > 0) {
+  if (!instrument.bookingAdminMode && instrument.minGapBetweenUserBookingsMinutes > 0) {
     const myBookings = await prisma.booking.findMany({
       where: {
         userId: bookForUser.id,
