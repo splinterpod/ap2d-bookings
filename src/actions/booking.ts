@@ -107,12 +107,16 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     return { error: `Start time must be on a ${BOOKING_GRID_MINUTES}-minute interval (e.g. 9:00, 9:15, 9:45).` };
   }
 
+  const isToday = date === dateKey(now);
+  const allowCurrentGridBlock =
+    isToday && (memberRequest || (instrument.bookingAdminMode && isAdmin));
+
   if (walkUp && !memberRequest) {
     const currentBlock = nowBlockStart(parseClock(clockTime(now)), BOOKING_GRID_MINUTES);
     if (startMinutes < currentBlock) {
       return { error: "That walk-up slot has passed. Refresh the page." };
     }
-  } else if (memberRequest && date === dateKey(now)) {
+  } else if (allowCurrentGridBlock) {
     const currentBlock = nowBlockStart(parseClock(clockTime(now)), BOOKING_GRID_MINUTES);
     if (startMinutes < currentBlock) {
       return { error: "That slot has passed. Refresh the page." };

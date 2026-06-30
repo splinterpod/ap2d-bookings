@@ -111,6 +111,8 @@ export function CalendarClient(props: Props) {
     usedStandardMinutes,
   } = props;
   const memberRequestMode = instrument.bookingAdminMode && !isAdmin;
+  const adminBookMode = instrument.bookingAdminMode && isAdmin;
+  const relaxedMinNotice = memberRequestMode || adminBookMode;
   const occupiedBlocks = useMemo(
     () => (memberRequestMode ? [...bookings, ...myPendingRequests] : bookings),
     [bookings, myPendingRequests, memberRequestMode],
@@ -153,9 +155,9 @@ export function CalendarClient(props: Props) {
         nowMin: liveNow.minutes,
         duration,
         occupied: occupiedForDate,
-        minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
+        minNoticeMinutes: relaxedMinNotice ? 0 : instrument.minNoticeMinutes,
       }),
-    [date, liveNow, duration, occupiedForDate, instrument.minNoticeMinutes, memberRequestMode],
+    [date, liveNow, duration, occupiedForDate, instrument.minNoticeMinutes, relaxedMinNotice],
   );
 
   useEffect(() => {
@@ -200,10 +202,10 @@ export function CalendarClient(props: Props) {
       nowMin: liveNow.minutes,
       slotMinutes: instrument.slotMinutes,
       maxSessionMinutes: maxBookingMinutes,
-      minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
+      minNoticeMinutes: relaxedMinNotice ? 0 : instrument.minNoticeMinutes,
       occupied: getOccupiedRanges(drag.dayKey, occupiedBlocks),
     });
-  }, [drag, liveNow, instrument.slotMinutes, maxBookingMinutes, instrument.minNoticeMinutes, memberRequestMode, occupiedBlocks]);
+  }, [drag, liveNow, instrument.slotMinutes, maxBookingMinutes, instrument.minNoticeMinutes, relaxedMinNotice, occupiedBlocks]);
 
   const dragBookable = useMemo(() => {
     if (!dragPreview || !drag) return false;
@@ -228,7 +230,7 @@ export function CalendarClient(props: Props) {
         nowMin: liveNow.minutes,
         slotMinutes: instrument.slotMinutes,
         maxSessionMinutes: maxBookingMinutes,
-        minNoticeMinutes: memberRequestMode ? 0 : instrument.minNoticeMinutes,
+        minNoticeMinutes: relaxedMinNotice ? 0 : instrument.minNoticeMinutes,
         occupied: getOccupiedRanges(dayKey, occupiedBlocks),
       });
       if (!normalized) {
@@ -607,12 +609,6 @@ export function CalendarClient(props: Props) {
         ) : (
           <div className="space-y-3">
             {message && <Alert tone={message.tone}>{message.text}</Alert>}
-            {memberRequestMode && (
-              <Alert tone="info">
-                Grey dashed blocks are your pending requests (only visible to you). Cancel them in My bookings
-                before submitting an overlapping request.
-              </Alert>
-            )}
             {instrument.bookingAdminMode && isAdmin && (
               <div>
                 <Label htmlFor="b-user">User</Label>
