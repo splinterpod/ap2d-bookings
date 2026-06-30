@@ -15,7 +15,7 @@ import {
   validateExtensionRequest,
 } from "@/lib/booking-extension";
 import { notifyAdminsOfBookingRequest, notifyAdminsOfRequestCancelled } from "@/lib/admin-notify";
-import { addMinutes, formatTz, formatBookingEnd, formatBookingRange, localToUtc, clockTime, parseClock } from "@/lib/time";
+import { addMinutes, formatTz, formatBookingEnd, formatBookingRange, localToUtc, clockTime, parseClock, dateKey } from "@/lib/time";
 import {
   BOOKING_GRID_MINUTES,
   isOnBookingGrid,
@@ -111,6 +111,11 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     const currentBlock = nowBlockStart(parseClock(clockTime(now)), BOOKING_GRID_MINUTES);
     if (startMinutes < currentBlock) {
       return { error: "That walk-up slot has passed. Refresh the page." };
+    }
+  } else if (memberRequest && date === dateKey(now)) {
+    const currentBlock = nowBlockStart(parseClock(clockTime(now)), BOOKING_GRID_MINUTES);
+    if (startMinutes < currentBlock) {
+      return { error: "That slot has passed. Refresh the page." };
     }
   } else if (startAt < now) {
     return { error: "Start time is in the past. Refresh the page for current slots." };
