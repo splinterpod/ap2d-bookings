@@ -117,9 +117,10 @@ export function CalendarClient(props: Props) {
     () => (memberRequestMode ? [...bookings, ...myPendingRequests] : bookings),
     [bookings, myPendingRequests, memberRequestMode],
   );
-  const maxBookingMinutes = memberRequestMode
-    ? instrument.advanceBookingDays * 24 * 60
-    : instrument.maxSessionMinutes;
+  const maxBookingMinutes =
+    memberRequestMode || adminBookMode
+      ? instrument.advanceBookingDays * 24 * 60
+      : instrument.maxSessionMinutes;
   const liveNow = useLiveAppNow(appTimezone, { dateKey: nowKey, minutes: nowMin });
   const scrollRef = useRef<HTMLDivElement>(null);
   const router = useRouter();

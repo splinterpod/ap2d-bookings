@@ -357,21 +357,23 @@ export async function validateBookingExtension(
     }
   }
 
-  const sh = parseStandardHours(instrument.standardHours);
-  const bookForUser = await prisma.user.findUnique({ where: { id: bookForUserId } });
-  if (!bookForUser) return { ok: false, error: "User not found." };
+  if (!instrument.bookingAdminMode) {
+    const sh = parseStandardHours(instrument.standardHours);
+    const bookForUser = await prisma.user.findUnique({ where: { id: bookForUserId } });
+    if (!bookForUser) return { ok: false, error: "User not found." };
 
-  const limitOverride = await getUserInstrumentLimitOverride(bookForUserId, instrument.id);
-  const limit = effectiveStandardLimit(bookForUser, instrument, limitOverride);
-  if (limit !== null) {
-    const usage = await weeklyUsage(bookForUserId, instrument.id, booking.startAt, sh);
-    const addedStandard = standardOverlapMinutes(booking.endAt, newEndAt, sh);
-    if (usage.standardMinutes + addedStandard > limit) {
-      const remaining = Math.max(0, limit - usage.standardMinutes);
-      return {
-        ok: false,
-        error: `Extension exceeds your weekly standard-hours limit. You have ${formatHours(remaining)} remaining.`,
-      };
+    const limitOverride = await getUserInstrumentLimitOverride(bookForUserId, instrument.id);
+    const limit = effectiveStandardLimit(bookForUser, instrument, limitOverride);
+    if (limit !== null) {
+      const usage = await weeklyUsage(bookForUserId, instrument.id, booking.startAt, sh);
+      const addedStandard = standardOverlapMinutes(booking.endAt, newEndAt, sh);
+      if (usage.standardMinutes + addedStandard > limit) {
+        const remaining = Math.max(0, limit - usage.standardMinutes);
+        return {
+          ok: false,
+          error: `Extension exceeds your weekly standard-hours limit. You have ${formatHours(remaining)} remaining.`,
+        };
+      }
     }
   }
 

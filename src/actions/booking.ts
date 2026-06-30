@@ -136,8 +136,8 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     };
   }
 
-  if (memberRequest) {
-    // No max session cap on member time requests.
+  if (instrument.bookingAdminMode) {
+    // No max session cap in booking admin mode.
   } else if (durationMinutes > instrument.maxSessionMinutes) {
     return { error: `Maximum session length is ${formatHours(instrument.maxSessionMinutes)}.` };
   }
@@ -151,21 +151,24 @@ export async function createBookingAction(_prev: FormState, formData: FormData):
     return { error: "You are not yet trained on this instrument. Contact a lab administrator." };
   }
 
-  // Weekly split-limit check (standard hours)
-  const sh = parseStandardHours(instrument.standardHours);
   const limitOverride = await getUserInstrumentLimitOverride(bookForUser.id, instrumentId);
-  const limit = effectiveStandardLimit(bookForUser, instrument, limitOverride);
-  if (limit !== null) {
-    const usage = await weeklyUsage(bookForUser.id, instrumentId, startAt, sh);
-    const newStandard = standardOverlapMinutes(startAt, endAt, sh);
-    if (usage.standardMinutes + newStandard > limit) {
-      const remaining = Math.max(0, limit - usage.standardMinutes);
-      return {
-        error:
-          newStandard === 0
-            ? "Weekly limit reached for standard hours."
-            : `This exceeds your weekly standard-hours limit. You have ${formatHours(remaining)} of ${formatHours(limit)} remaining this week. After-hours time is unlimited.`,
-      };
+
+  // Weekly standard-hours cap (normal self-service booking only)
+  if (!instrument.bookingAdminMode) {
+    const sh = parseStandardHours(instrument.standardHours);
+    const limit = effectiveStandardLimit(bookForUser, instrument, limitOverride);
+    if (limit !== null) {
+      const usage = await weeklyUsage(bookForUser.id, instrumentId, startAt, sh);
+      const newStandard = standardOverlapMinutes(startAt, endAt, sh);
+      if (usage.standardMinutes + newStandard > limit) {
+        const remaining = Math.max(0, limit - usage.standardMinutes);
+        return {
+          error:
+            newStandard === 0
+              ? "Weekly limit reached for standard hours."
+              : `This exceeds your weekly standard-hours limit. You have ${formatHours(remaining)} of ${formatHours(limit)} remaining this week. After-hours time is unlimited.`,
+        };
+      }
     }
   }
 
